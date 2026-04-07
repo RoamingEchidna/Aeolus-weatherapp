@@ -4,7 +4,7 @@ import 'package:weather_gov/providers/forecast_provider.dart';
 import 'package:weather_gov/services/nominatim_service.dart';
 import 'package:weather_gov/services/nws_service.dart';
 import 'package:weather_gov/services/cache_service.dart';
-import 'package:weather_gov/constants.dart';
+import 'package:weather_gov/constants.dart' show kRowTempGroup, kRowWindGroup;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -58,8 +58,8 @@ void main() {
     test('starts with no location and default row visibility', () async {
       final provider = await _makeProvider();
       expect(provider.currentLocation, isNull);
-      expect(provider.visibleRows[kRowTemperature], isTrue);
-      expect(provider.visibleRows[kRowDewpoint], isFalse);
+      expect(provider.visibleRows[kRowTempGroup], isTrue);
+      expect(provider.visibleRows[kRowWindGroup], isTrue);
       expect(provider.isLoading, isFalse);
     });
   });
@@ -96,11 +96,11 @@ void main() {
   group('ForecastProvider.toggleRow', () {
     test('flips row visibility', () async {
       final provider = await _makeProvider();
-      expect(provider.visibleRows[kRowTemperature], isTrue);
-      provider.toggleRow(kRowTemperature);
-      expect(provider.visibleRows[kRowTemperature], isFalse);
-      provider.toggleRow(kRowTemperature);
-      expect(provider.visibleRows[kRowTemperature], isTrue);
+      expect(provider.visibleRows[kRowTempGroup], isTrue);
+      provider.toggleRow(kRowTempGroup);
+      expect(provider.visibleRows[kRowTempGroup], isFalse);
+      provider.toggleRow(kRowTempGroup);
+      expect(provider.visibleRows[kRowTempGroup], isTrue);
     });
   });
 

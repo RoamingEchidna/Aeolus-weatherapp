@@ -29,7 +29,6 @@ class ForecastProvider extends ChangeNotifier {
         _cacheService = cacheService,
         _prefs = prefs;
 
-  /// Call once at startup to restore cached state and preferences.
   Future<void> init() async {
     savedLocations = _cacheService.loadAll();
     if (savedLocations.isNotEmpty) {

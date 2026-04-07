@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.weather.gov)",
+      "WebFetch(domain:api.weather.gov)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:forecast.weather.gov)",
+      "Bash(flutter --version)",
+      "Bash(flutter doctor:*)",
+      "Bash(flutter create:*)",
+      "Bash(flutter pub:*)",
+      "Bash(flutter build:*)",
+      "Bash(flutter test:*)",
+      "Read(//c/Android/Sdk/emulator/**)",
+      "Bash(./emulator -accel-check)",
+      "Read(//c/Android/Sdk/platform-tools/**)",
+      "Bash(./adb devices:*)",
+      "Bash(./adb kill-server:*)",
+      "Bash(./adb start-server:*)",
+      "Bash(taskkill /F /IM qemu-system-x86_64.exe)",
+      "Bash(taskkill /F /IM emulator.exe)",
+      "Bash(taskkill /F /IM \"qemu-system-x86_64.exe\")",
+      "Bash(taskkill /F /IM \"emulator.exe\")",
+      "Bash(powershell -Command \"Stop-Process -Name 'qemu-system-x86_64' -Force -ErrorAction SilentlyContinue; Stop-Process -Name 'emulator' -Force -ErrorAction SilentlyContinue; Write-Output 'done'\")",
+      "mcp__chrome-devtools__new_page",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__list_network_requests",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__evaluate_script",
+      "Bash(gh api:*)",
+      "WebSearch",
+      "WebFetch(domain:web.archive.org)",
+      "Read(//c/Users/Jacob Dunning/.claude/projects/c--Users-Jacob-Dunning-Documents-Coding-Projects-Weather-Gov/**)",
+      "mcp__chrome-devtools__list_pages",
+      "Bash(curl -s \"https://forecast.weather.gov/MapClick.php?lat=37.3636&lon=-118.394&unit=0&lg=english&FcstType=graphical\")"
+    ]
+  }
+}

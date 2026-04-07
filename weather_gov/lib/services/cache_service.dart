@@ -13,9 +13,15 @@ class CacheService {
     final raw = _prefs.getString(_key);
     if (raw == null) return [];
     final list = json.decode(raw) as List<dynamic>;
-    return list
-        .map((e) => SavedLocation.fromJson(e as Map<String, dynamic>))
-        .toList();
+    final results = <SavedLocation>[];
+    for (final e in list) {
+      try {
+        results.add(SavedLocation.fromJson(e as Map<String, dynamic>));
+      } catch (_) {
+        // Skip entries that don't match the current format (e.g. after an upgrade).
+      }
+    }
+    return results;
   }
 
   void saveAll(List<SavedLocation> locations) {
