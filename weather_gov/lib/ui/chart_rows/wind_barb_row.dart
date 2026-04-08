@@ -14,8 +14,18 @@ const _dirDeg = <String, double>{
 class WindBarbRow extends StatelessWidget {
   final List<HourlyPeriod> periods;
   final double height;
+  final double minY;
+  final double maxY;
+  final double hInterval;
 
-  const WindBarbRow({super.key, required this.periods, this.height = kChartRowHeight});
+  const WindBarbRow({
+    super.key,
+    required this.periods,
+    required this.minY,
+    required this.maxY,
+    required this.hInterval,
+    this.height = kChartRowHeight,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -26,8 +36,12 @@ class WindBarbRow extends StatelessWidget {
       child: CustomPaint(
         painter: _WindBarbPainter(
           periods: periods,
-          barbColor: scheme.onSurface,
+          lineColor: kColorWind,
+          barbColor: scheme.outline,
           gridColor: scheme.outline.withAlpha(70),
+          minY: minY,
+          maxY: maxY,
+          hInterval: hInterval,
         ),
       ),
     );
@@ -36,38 +50,80 @@ class WindBarbRow extends StatelessWidget {
 
 class _WindBarbPainter extends CustomPainter {
   final List<HourlyPeriod> periods;
+  final Color lineColor;
   final Color barbColor;
   final Color gridColor;
+  final double minY;
+  final double maxY;
+  final double hInterval;
 
   const _WindBarbPainter({
     required this.periods,
+    required this.lineColor,
     required this.barbColor,
     required this.gridColor,
+    required this.minY,
+    required this.maxY,
+    required this.hInterval,
   });
+
+  double _yForSpeed(double speed, double height) {
+    return height * (1.0 - (speed - minY) / (maxY - minY));
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
       ..color = gridColor
-      ..strokeWidth = 1.0
+      ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
+
+    // Horizontal grid lines at hInterval increments.
+    final first = (minY / hInterval).ceil() * hInterval;
+    for (double v = first; v <= maxY + 0.001; v += hInterval) {
+      final y = _yForSpeed(v, size.height);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
 
     // Vertical lines every hour; day boundaries are thicker.
     for (int i = 0; i < periods.length; i++) {
       final x = i * kPixelsPerHour;
       final isDayBoundary = periods[i].startTime.toLocal().hour == 0;
-      gridPaint.strokeWidth = isDayBoundary ? 1.0 : 0.5;
+      gridPaint.strokeWidth = isDayBoundary ? 2.5 : 0.5;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
 
-    // Draw each wind barb centered in its hour cell.
+    // Smooth connecting line through barb centers (full color, cubic bezier).
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final pts = List.generate(periods.length, (i) => Offset(
+      i * kPixelsPerHour + kPixelsPerHour / 2,
+      _yForSpeed(periods[i].windSpeedMph, size.height),
+    ));
+    if (pts.isNotEmpty) {
+      final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+      for (int i = 1; i < pts.length; i++) {
+        final prev = pts[i - 1];
+        final curr = pts[i];
+        final cpx = (prev.dx + curr.dx) / 2;
+        path.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
+      }
+      canvas.drawPath(path, linePaint);
+    }
+
+    // Draw each wind barb at the y position corresponding to wind speed.
     for (int i = 0; i < periods.length; i++) {
+      final speed = periods[i].windSpeedMph;
       final cx = i * kPixelsPerHour + kPixelsPerHour / 2;
-      final cy = size.height / 2;
+      final cy = _yForSpeed(speed, size.height);
       _drawBarb(
         canvas,
         Offset(cx, cy),
-        periods[i].windSpeedMph,
+        speed,
         _dirDeg[periods[i].windDirection] ?? 0,
       );
     }
@@ -75,14 +131,15 @@ class _WindBarbPainter extends CustomPainter {
 
   void _drawBarb(
       Canvas canvas, Offset center, double speedMph, double dirDeg) {
+    final dimColor = barbColor.withAlpha(80);
     final linePaint = Paint()
-      ..color = barbColor
-      ..strokeWidth = 1.2
+      ..color = dimColor
+      ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final fillPaint = Paint()
-      ..color = barbColor
+      ..color = dimColor
       ..style = PaintingStyle.fill;
 
     // Calm wind: draw a small circle and return.
@@ -162,6 +219,10 @@ class _WindBarbPainter extends CustomPainter {
   @override
   bool shouldRepaint(_WindBarbPainter old) =>
       old.periods != periods ||
+      old.lineColor != lineColor ||
       old.barbColor != barbColor ||
-      old.gridColor != gridColor;
+      old.gridColor != gridColor ||
+      old.minY != minY ||
+      old.maxY != maxY ||
+      old.hInterval != hInterval;
 }

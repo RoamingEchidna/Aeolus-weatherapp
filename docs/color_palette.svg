@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="760"
+     style="font-family: 'Courier New', monospace; background: #2A2A2E;">
+
+  <!-- ── Section 1: Graph Colors ─────────────────────────────── -->
+  <text x="20" y="22" fill="#CCCCCC" font-size="13" font-weight="bold">Graph Colors</text>
+
+  <!-- kColorTemperature #FF0000 -->
+  <rect x="20"  y="30" width="110" height="90" fill="#FF0000" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="25"  y="44" fill="white" font-size="8">kColorTemperature</text>
+  <text x="25"  y="55" fill="white" font-size="8">#FF0000</text>
+
+  <!-- kColorWindChill #0000CC -->
+  <rect x="138" y="30" width="110" height="90" fill="#0000CC" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="143" y="44" fill="white" font-size="8">kColorWindChill</text>
+  <text x="143" y="55" fill="white" font-size="8">#0000CC</text>
+
+  <!-- kColorDewpoint #009900 -->
+  <rect x="256" y="30" width="110" height="90" fill="#009900" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="261" y="44" fill="white" font-size="8">kColorDewpoint</text>
+  <text x="261" y="55" fill="white" font-size="8">#009900</text>
+
+  <!-- kColorHumidity #006600 -->
+  <rect x="374" y="30" width="110" height="90" fill="#006600" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="379" y="44" fill="white" font-size="8">kColorHumidity</text>
+  <text x="379" y="55" fill="white" font-size="8">#006600</text>
+
+  <!-- kColorPrecip #0000CC -->
+  <rect x="492" y="30" width="110" height="90" fill="#0000CC" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="497" y="44" fill="white" font-size="8">kColorPrecip</text>
+  <text x="497" y="55" fill="white" font-size="8">#0000CC</text>
+
+  <!-- kColorSkycover #99CCFF -->
+  <rect x="610" y="30" width="110" height="90" fill="#99CCFF" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="615" y="44" fill="#222" font-size="8">kColorSkycover</text>
+  <text x="615" y="55" fill="#222" font-size="8">#99CCFF</text>
+
+  <!-- kColorWind #990099 -->
+  <rect x="728" y="30" width="110" height="90" fill="#990099" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="733" y="44" fill="white" font-size="8">kColorWind</text>
+  <text x="733" y="55" fill="white" font-size="8">#990099</text>
+
+  <!-- kColorCursor #FDD835 -->
+  <rect x="846" y="30" width="110" height="90" fill="#FDD835" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="851" y="44" fill="#222" font-size="8">kColorCursor</text>
+  <text x="851" y="55" fill="#222" font-size="8">#FDD835</text>
+
+
+  <!-- ── Section 2: Weather Type Colors ──────────────────────── -->
+  <text x="20" y="152" fill="#CCCCCC" font-size="13" font-weight="bold">Weather Type Colors (Conditions Row)</text>
+
+  <!-- kColorWeatherRain #009900 -->
+  <rect x="20"  y="160" width="110" height="90" fill="#009900" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="25"  y="174" fill="white" font-size="8">kColorWeatherRain</text>
+  <text x="25"  y="185" fill="white" font-size="8">#009900</text>
+
+  <!-- kColorWeatherThunder #FF0000 -->
+  <rect x="138" y="160" width="110" height="90" fill="#FF0000" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="143" y="174" fill="white" font-size="8">kColorWeatherThunder</text>
+  <text x="143" y="185" fill="white" font-size="8">#FF0000</text>
+
+  <!-- kColorWeatherSnow #0099CC -->
+  <rect x="256" y="160" width="110" height="90" fill="#0099CC" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="261" y="174" fill="white" font-size="8">kColorWeatherSnow</text>
+  <text x="261" y="185" fill="white" font-size="8">#0099CC</text>
+
+  <!-- kColorWeatherFreezingRain #CC99CC -->
+  <rect x="374" y="160" width="110" height="90" fill="#CC99CC" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="379" y="174" fill="#222" font-size="8">kColorWeatherFreezingRain</text>
+  <text x="379" y="185" fill="#222" font-size="8">#CC99CC</text>
+
+  <!-- kColorWeatherSleet #F06600 -->
+  <rect x="492" y="160" width="110" height="90" fill="#F06600" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="497" y="174" fill="white" font-size="8">kColorWeatherSleet</text>
+  <text x="497" y="185" fill="white" font-size="8">#F06600</text>
+
+
+  <!-- ── Section 3: Alert Colors ─────────────────────────────── -->
+  <text x="20" y="282" fill="#CCCCCC" font-size="13" font-weight="bold">Alert Severity Colors</text>
+
+  <!-- kColorAlertExtreme #D32F2F -->
+  <rect x="20"  y="290" width="110" height="90" fill="#D32F2F" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="25"  y="304" fill="white" font-size="8">kColorAlertExtreme</text>
+  <text x="25"  y="315" fill="white" font-size="8">#D32F2F</text>
+
+  <!-- kColorAlertSevere #D32F2F -->
+  <rect x="138" y="290" width="110" height="90" fill="#D32F2F" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="143" y="304" fill="white" font-size="8">kColorAlertSevere</text>
+  <text x="143" y="315" fill="white" font-size="8">#D32F2F</text>
+
+  <!-- kColorAlertModerate #F57C00 -->
+  <rect x="256" y="290" width="110" height="90" fill="#F57C00" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="261" y="304" fill="white" font-size="8">kColorAlertModerate</text>
+  <text x="261" y="315" fill="white" font-size="8">#F57C00</text>
+
+  <!-- kColorAlertMinor #F9A825 -->
+  <rect x="374" y="290" width="110" height="90" fill="#F9A825" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="379" y="304" fill="#222" font-size="8">kColorAlertMinor</text>
+  <text x="379" y="315" fill="#222" font-size="8">#F9A825</text>
+
+
+  <!-- ── Section 4: Light Mode Backgrounds ───────────────────── -->
+  <text x="20" y="412" fill="#CCCCCC" font-size="13" font-weight="bold">Light Mode Backgrounds (proposed)</text>
+
+  <rect x="20"  y="420" width="150" height="90" fill="#F1F0E8" rx="3" stroke="#999" stroke-width="1"/>
+  <text x="25"  y="434" fill="#222" font-size="8">#F1F0E8</text>
+
+  <rect x="178" y="420" width="150" height="90" fill="#E5E1DA" rx="3" stroke="#999" stroke-width="1"/>
+  <text x="183" y="434" fill="#222" font-size="8">#E5E1DA</text>
+
+  <rect x="336" y="420" width="150" height="90" fill="#B3C8CF" rx="3" stroke="#999" stroke-width="1"/>
+  <text x="341" y="434" fill="#222" font-size="8">#B3C8CF</text>
+
+  <rect x="494" y="420" width="150" height="90" fill="#89A8B2" rx="3" stroke="#999" stroke-width="1"/>
+  <text x="499" y="434" fill="#222" font-size="8">#89A8B2</text>
+
+  <rect x="652" y="420" width="150" height="90" fill="#074F57" rx="3" stroke="#999" stroke-width="1"/>
+  <text x="657" y="434" fill="white" font-size="8">#074F57</text>
+
+
+  <!-- ── Section 5: Dark Mode Backgrounds ────────────────────── -->
+  <text x="20" y="542" fill="#CCCCCC" font-size="13" font-weight="bold">Dark Mode Backgrounds (proposed)</text>
+
+  <rect x="20"  y="550" width="150" height="90" fill="#1A2020" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="25"  y="564" fill="white" font-size="8">#1A2020</text>
+
+  <rect x="178" y="550" width="150" height="90" fill="#2C3333" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="183" y="564" fill="white" font-size="8">#2C3333</text>
+
+  <rect x="336" y="550" width="150" height="90" fill="#2E4F4F" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="341" y="564" fill="white" font-size="8">#2E4F4F</text>
+
+  <rect x="494" y="550" width="150" height="90" fill="#0E8388" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="499" y="564" fill="white" font-size="8">#0E8388</text>
+
+  <rect x="652" y="550" width="150" height="90" fill="#CBE4DE" rx="3" stroke="#555" stroke-width="1"/>
+  <text x="657" y="564" fill="#222" font-size="8">#CBE4DE</text>
+
+  <!-- Footer note -->
+  <text x="20" y="720" fill="#888" font-size="10">* Background colors are approximate. Material 3 generates exact values from seed #1565C0 via HCT color space at runtime.</text>
+  <text x="20" y="735" fill="#888" font-size="10">* kColorPrecip and kColorWindChill share the same hex value (#0000CC).</text>
+
+</svg>

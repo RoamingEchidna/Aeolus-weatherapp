@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../constants.dart';
 import '../models/hourly_period.dart';
@@ -10,13 +11,16 @@ import 'chart_rows/wind_barb_row.dart';
 import 'chart_rows/conditions_row.dart';
 
 const double _kLegendBarHeight = 20.0;
+const double _kValuePanelHeight = 64.0;
+// Width of the invisible drag hit area centered on the 2px cursor bar.
+const double _kCursorHitWidth = 24.0;
 
 // Carries a chart row widget plus optional y-axis scale and legend info.
 class _RowEntry {
   final String name;
   final Widget widget;
   final double height;
-  // Null for rows without a numeric y-axis (Wind, Conditions).
+  // Null for rows without a numeric y-axis (Conditions).
   final double? minY;
   final double? maxY;
   final double? hInterval;
@@ -42,19 +46,46 @@ class _RowEntry {
   double get totalHeight => legendBarHeight + height;
 }
 
+
 // Matches the hInterval logic in MultiLineChartRow so labels align with grid lines.
 double _hInterval(double lo, double hi) {
   final range = hi - lo;
   return range > 80 ? 20.0 : range > 40 ? 10.0 : range > 20 ? 5.0 : 2.0;
 }
 
-class ScrollableChart extends StatelessWidget {
+class ScrollableChart extends StatefulWidget {
   final List<HourlyPeriod> periods;
 
   const ScrollableChart({super.key, required this.periods});
 
   @override
+  State<ScrollableChart> createState() => _ScrollableChartState();
+}
+
+class _ScrollableChartState extends State<ScrollableChart> {
+  late double _cursorX;
+  bool _cursorDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cursorX = _initCursorX();
+  }
+
+  double _initCursorX() {
+    final now = DateTime.now();
+    final elapsed =
+        now.difference(widget.periods[0].startTime).inMinutes / 60.0;
+    return (elapsed * kPixelsPerHour)
+        .clamp(0.0, widget.periods.length * kPixelsPerHour);
+  }
+
+  int get _cursorIndex =>
+      (_cursorX / kPixelsPerHour).round().clamp(0, widget.periods.length - 1);
+
+  @override
   Widget build(BuildContext context) {
+    final periods = widget.periods;
     final provider = context.watch<ForecastProvider>();
     final visible = provider.visibleRows;
     final textTheme = Theme.of(context).textTheme;
@@ -67,6 +98,8 @@ class ScrollableChart extends StatelessWidget {
       return const Center(
           child: Text('All rows hidden. Enable some in the menu.'));
     }
+
+    final chartContentWidth = periods.length * kPixelsPerHour;
 
     // --- Non-scrolling legend overlay (full width, above each chart row) ---
     final legendOverlay = IgnorePointer(
@@ -155,53 +188,203 @@ class ScrollableChart extends StatelessWidget {
     );
 
     return Stack(
-        children: [
-          // Full-width horizontally scrollable chart.
-          Positioned.fill(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: kPixelsPerHour),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Full-width horizontally scrollable chart with cursor bar inside.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: _kValuePanelHeight,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding:
+                const EdgeInsets.symmetric(horizontal: kPixelsPerHour),
+            child: GestureDetector(
+              onLongPressStart: (details) {
+                setState(() {
+                  _cursorX = details.localPosition.dx.clamp(0.0, chartContentWidth.toDouble());
+                  _cursorDragging = true;
+                });
+              },
+              onLongPressMoveUpdate: (details) {
+                setState(() {
+                  _cursorX = details.localPosition.dx.clamp(0.0, chartContentWidth.toDouble());
+                });
+              },
+              onLongPressEnd: (_) => setState(() => _cursorDragging = false),
+              onLongPressCancel: () => setState(() => _cursorDragging = false),
+              child: SizedBox(
+              width: chartContentWidth,
+              child: Stack(
                 children: [
-                  TimeAxis(periods: periods),
-                  // Each row: spacer for legend bar + chart widget.
-                  ...rows.expand((entry) => [
-                        if (entry.legendItems.isNotEmpty)
-                          SizedBox(height: entry.legendBarHeight),
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: rowBorderColor, width: 1.0),
-                              bottom: BorderSide(color: rowBorderColor, width: 1.0),
+                  // Chart content column.
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TimeAxis(periods: periods),
+                      ...rows.expand((entry) => [
+                            if (entry.legendItems.isNotEmpty)
+                              SizedBox(height: entry.legendBarHeight),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(
+                                      color: rowBorderColor, width: 1.0),
+                                  bottom: BorderSide(
+                                      color: rowBorderColor, width: 1.0),
+                                ),
+                              ),
+                              child: entry.widget,
                             ),
+                          ]),
+                    ],
+                  ),
+                  // Cursor bar — spans full height including time axis.
+                  Positioned(
+                    left: _cursorX - _kCursorHitWidth / 2,
+                    top: 0,
+                    bottom: 0,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onHorizontalDragDown: (_) =>
+                          setState(() => _cursorDragging = true),
+                      onHorizontalDragUpdate: (details) {
+                        setState(() {
+                          _cursorX = (_cursorX + details.delta.dx)
+                              .clamp(0.0, chartContentWidth);
+                        });
+                      },
+                      onHorizontalDragEnd: (_) =>
+                          setState(() => _cursorDragging = false),
+                      onHorizontalDragCancel: () =>
+                          setState(() => _cursorDragging = false),
+                      child: SizedBox(
+                        width: _kCursorHitWidth,
+                        child: Center(
+                          child: Container(
+                            width: _cursorDragging ? 3.5 : 2.0,
+                            color: kColorCursor,
                           ),
-                          child: entry.widget,
                         ),
-                      ]),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
-          // Legend overlay — pinned below the time axis, full width.
-          Positioned(
-            left: 0,
-            right: 0,
-            top: kTimeAxisHeight,
-            bottom: 0,
-            child: legendOverlay,
+        ),
+        ),
+        // Legend overlay — pinned below the time axis, full width.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: kTimeAxisHeight,
+          bottom: _kValuePanelHeight,
+          child: legendOverlay,
+        ),
+        // Y-axis label overlay — pinned to the left, below the time axis.
+        Positioned(
+          left: 0,
+          top: kTimeAxisHeight,
+          width: kLabelColumnWidth,
+          bottom: _kValuePanelHeight,
+          child: yAxisOverlay,
+        ),
+        // Value panel — fixed at the bottom, shows cursor period values.
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: _kValuePanelHeight,
+          child: _buildValuePanel(context, periods[_cursorIndex], visible),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildValuePanel(
+      BuildContext context, HourlyPeriod p, Map<String, bool> visible) {
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    final brightness = Theme.of(context).brightness;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final timeFmt = DateFormat('EEE HH:mm');
+
+    final valueStyle = textTheme.labelMedium!.copyWith(fontSize: 16);
+
+    // Fixed-width cell so values never shift neighbours when digits change.
+    Widget cell(String text, Color color, double width) => SizedBox(
+          width: width,
+          child: Text(
+            text,
+            style: valueStyle.copyWith(color: color),
+            textAlign: TextAlign.center,
+            maxLines: 1,
           ),
-          // Y-axis label overlay — pinned to the left, below the time axis.
-          Positioned(
-            left: 0,
-            top: kTimeAxisHeight,
-            width: kLabelColumnWidth,
-            bottom: 0,
-            child: yAxisOverlay,
+        );
+
+    // Narrow separator — just 4px of breathing room between cells.
+    Widget sep() => SizedBox(
+          width: 20,
+          child: Text('·',
+              textAlign: TextAlign.center,
+              style: valueStyle.copyWith(color: scheme.onSurfaceVariant)),
+        );
+
+    // Line 1: time + temperature group.
+    final line1 = <Widget>[];
+    line1.add(cell(timeFmt.format(p.startTime.toLocal()), scheme.onSurface, 82));
+    if (visible[kRowTempGroup] == true) {
+      line1.add(sep());
+      line1.add(cell('${p.temperature}°', kColorTemperature, 36));
+      line1.add(sep());
+      line1.add(cell('WC ${p.windChillF.round()}°', kColorWindChill, 54));
+      line1.add(sep());
+      line1.add(cell('Dew ${p.dewpointF.round()}°', kColorDewpoint, 58));
+    }
+
+    // Line 2: wind + atmos group.
+    final line2 = <Widget>[];
+    if (visible[kRowWindGroup] == true) {
+      line2.add(cell('${p.windSpeedMph.round()} mph ${p.windDirection}', kColorWind, 80));
+    }
+    if (visible[kRowAtmosGroup] == true) {
+      if (line2.isNotEmpty) line2.add(sep());
+      line2.add(cell('RH ${p.relativeHumidity}%', kColorHumidity, 62));
+      line2.add(sep());
+      line2.add(cell('Precip ${p.precipChance}%', kColorPrecip, 74));
+      line2.add(sep());
+      line2.add(cell('Sky ${p.skyCoverPct}%', kColorSkycover, 70));
+    }
+
+    Widget buildLine(List<Widget> items) => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: screenWidth),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: items,
+            ),
           ),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: brightness == Brightness.light ? kLightPanelBackground : kDarkPanelBackground,
+        border: Border(
+          top: BorderSide(color: scheme.outline, width: 1.0),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          buildLine(line1),
+          if (line2.isNotEmpty) buildLine(line2),
         ],
-      );
+      ),
+    );
   }
 
   List<_RowEntry> _buildRows(
@@ -251,13 +434,29 @@ class ScrollableChart extends StatelessWidget {
 
     // --- Wind barbs ---
     if (visible[kRowWindGroup] == true) {
+      final speeds = periods.map((p) => p.windSpeedMph);
+      final windLo = (speeds.reduce(min) - 2).clamp(0.0, double.infinity);
+      final windHi = speeds.reduce(max) + 2;
+      final windMin = windLo.floorToDouble();
+      final windMax = windHi.ceilToDouble();
+      final windInterval = _hInterval(windMin, windMax);
       entries.add(_RowEntry(
         name: kRowWindGroup,
         height: rowHeight,
+        minY: windMin,
+        maxY: windMax,
+        hInterval: windInterval,
+        unit: ' mph',
         legendItems: const [
-          (color: kColorWind, label: 'Wind'),
+          (color: kColorWind, label: 'Wind Speed'),
         ],
-        widget: WindBarbRow(periods: periods, height: rowHeight),
+        widget: WindBarbRow(
+          periods: periods,
+          height: rowHeight,
+          minY: windMin,
+          maxY: windMax,
+          hInterval: windInterval,
+        ),
       ));
     }
 

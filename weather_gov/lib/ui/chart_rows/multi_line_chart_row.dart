@@ -66,13 +66,15 @@ class MultiLineChartRow extends StatelessWidget {
     final lineBars = series.map((s) {
       final spots = List.generate(
         periods.length,
-        (i) => FlSpot(i.toDouble(), s.valueSelector(periods[i])),
+        // Offset by 0.5 so each point sits at the centre of its 24px hour cell,
+        // matching WindBarbRow which draws at i*kPixelsPerHour + kPixelsPerHour/2.
+        (i) => FlSpot(i + 0.5, s.valueSelector(periods[i])),
       );
       return LineChartBarData(
         spots: spots,
         isCurved: true,
         color: s.color,
-        barWidth: 1.5,
+        barWidth: 2.5,
         dotData: const FlDotData(show: false),
         belowBarData: BarAreaData(show: false),
       );
@@ -84,7 +86,7 @@ class MultiLineChartRow extends StatelessWidget {
       child: LineChart(
         LineChartData(
           minX: 0,
-          maxX: (periods.length - 1).toDouble(),
+          maxX: periods.length.toDouble(),
           minY: lo,
           maxY: hi,
           lineBarsData: lineBars,
@@ -99,7 +101,7 @@ class MultiLineChartRow extends StatelessWidget {
             getDrawingHorizontalLine: (_) =>
                 FlLine(color: gridColor, strokeWidth: 0.5),
             getDrawingVerticalLine: (value) => dayBounds.contains(value.round())
-                ? FlLine(color: gridColor, strokeWidth: 1.0)
+                ? FlLine(color: gridColor, strokeWidth: 2.5)
                 : FlLine(color: gridColor, strokeWidth: 0.5),
           ),
           lineTouchData: const LineTouchData(enabled: false),

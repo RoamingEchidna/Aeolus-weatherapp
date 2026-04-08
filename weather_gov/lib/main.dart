@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'constants.dart';
 import 'providers/forecast_provider.dart';
 import 'services/nws_service.dart';
 import 'services/nominatim_service.dart';
@@ -41,6 +42,11 @@ class WeatherApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1565C0),
           brightness: Brightness.light,
+        ).copyWith(
+          surface: kLightSurface,
+          surfaceContainerHighest: kLightSurfaceContainerHighest,
+          outline: kLightOutline,
+          onSurface: kLightOnSurface,
         ),
         useMaterial3: true,
       ),
@@ -48,6 +54,11 @@ class WeatherApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1565C0),
           brightness: Brightness.dark,
+        ).copyWith(
+          surface: kDarkSurface,
+          surfaceContainerHighest: kDarkSurfaceContainerHighest,
+          outline: kDarkOutline,
+          onSurface: kDarkOnSurface,
         ),
         useMaterial3: true,
       ),

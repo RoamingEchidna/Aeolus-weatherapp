@@ -11,9 +11,9 @@ const int kMaxSavedLocations = 10;
 const Color kColorTemperature = Color(0xFFFF0000);
 const Color kColorWindChill   = Color(0xFF0000CC);
 const Color kColorDewpoint    = Color(0xFF009900);
-const Color kColorHumidity    = Color(0xFF006600);
-const Color kColorPrecip      = Color(0xFF996633);
-const Color kColorSkycover    = Color(0xFF0000CC);
+const Color kColorHumidity    = Color(0xFF178017);
+const Color kColorPrecip      = Color(0xFF0000CC);
+const Color kColorSkycover    = Color(0xFF1B66B0);
 const Color kColorWind        = Color(0xFF990099); // wind barb color
 
 // Weather type colors (Conditions row)
@@ -23,9 +23,26 @@ const Color kColorWeatherSnow         = Color(0xFF0099CC);
 const Color kColorWeatherFreezingRain = Color(0xFFCC99CC);
 const Color kColorWeatherSleet        = Color(0xFFF06600);
 
+// Theme palette — light mode
+const Color kLightSurface                  = Color(0xFFF1F0E8);
+const Color kLightSurfaceContainerHighest  = Color(0xFFE5E1DA);
+const Color kLightPanelBackground          = Color(0xFFB3C8CF);
+const Color kLightOutline                  = Color(0xFF89A8B2);
+const Color kLightOnSurface                = Color(0xFF074F57);
+
+// Theme palette — dark mode
+const Color kDarkSurface                   = Color(0xFF1A2020);
+const Color kDarkSurfaceContainerHighest   = Color(0xFF2C3333);
+const Color kDarkPanelBackground           = Color(0xFF2E4F4F);
+const Color kDarkOutline                   = Color(0xFF0E8388);
+const Color kDarkOnSurface                 = Color(0xFFCBE4DE);
+
+// Cursor color
+const Color kColorCursor = Color(0xFFFDD835);
+
 // Alert severity colors
-const Color kColorAlertExtreme  = Color(0xFFD32F2F);
-const Color kColorAlertSevere   = Color(0xFFD32F2F);
+const Color kColorAlertExtreme  = Color(0xFFA91818);
+const Color kColorAlertSevere   = Color(0xFFA91818);
 const Color kColorAlertModerate = Color(0xFFF57C00);
 const Color kColorAlertMinor    = Color(0xFFF9A825);
 
