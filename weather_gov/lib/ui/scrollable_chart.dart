@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../constants.dart';
+import '../models/astro_day.dart';
 import '../models/hourly_period.dart';
 import '../providers/forecast_provider.dart';
 import 'time_axis.dart';
 import 'chart_rows/multi_line_chart_row.dart';
 import 'chart_rows/wind_barb_row.dart';
 import 'chart_rows/conditions_row.dart';
+import 'chart_rows/astro_row.dart';
 
 const double _kLegendBarHeight = 20.0;
 const double _kValuePanelHeight = 64.0;
@@ -93,7 +95,8 @@ class _ScrollableChartState extends State<ScrollableChart> {
     final rowBorderColor = Theme.of(context).colorScheme.outline;
     final rowHeight = MediaQuery.of(context).size.height * 0.20;
 
-    final rows = _buildRows(periods, visible, rowHeight);
+    final astroDays = provider.currentLocation?.cachedAstroData ?? [];
+    final rows = _buildRows(periods, visible, rowHeight, astroDays);
     if (rows.isEmpty) {
       return const Center(
           child: Text('All rows hidden. Enable some in the menu.'));
@@ -388,7 +391,7 @@ class _ScrollableChartState extends State<ScrollableChart> {
   }
 
   List<_RowEntry> _buildRows(
-      List<HourlyPeriod> periods, Map<String, bool> visible, double rowHeight) {
+      List<HourlyPeriod> periods, Map<String, bool> visible, double rowHeight, List<AstroDay> astroDays) {
     final entries = <_RowEntry>[];
 
     // --- Temperature / Wind Chill / Dewpoint ---
@@ -502,6 +505,15 @@ class _ScrollableChartState extends State<ScrollableChart> {
         name: kRowConditions,
         height: 50.0,
         widget: ConditionsRow(periods: periods, height: 50.0),
+      ));
+    }
+
+    // --- Astronomical (no legend, fixed 50dp height) ---
+    if (visible[kRowAstro] == true) {
+      entries.add(_RowEntry(
+        name: kRowAstro,
+        height: 50.0,
+        widget: AstroRow(periods: periods, astroDays: astroDays),
       ));
     }
 
