@@ -4,7 +4,10 @@ import 'package:weather_gov/providers/forecast_provider.dart';
 import 'package:weather_gov/services/nominatim_service.dart';
 import 'package:weather_gov/services/nws_service.dart';
 import 'package:weather_gov/services/cache_service.dart';
-import 'package:weather_gov/constants.dart' show kRowTempGroup, kRowWindGroup;
+import 'package:weather_gov/services/usno_service.dart';
+import 'package:weather_gov/models/astro_day.dart';
+import 'package:weather_gov/constants.dart'
+    show kRowTempGroup, kRowWindGroup, kRowAstro;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -42,13 +45,36 @@ http.Client _makeNominatimClient() {
   ''', 200));
 }
 
-Future<ForecastProvider> _makeProvider() async {
+http.Client _makeUsnoClient() {
+  return MockClient((_) async => http.Response('''
+    {
+      "type": "Feature",
+      "properties": {
+        "data": {
+          "sundata": [
+            {"phen": "Begin Civil Twilight", "time": "06:16"},
+            {"phen": "Rise",                 "time": "06:43"},
+            {"phen": "Upper Transit",        "time": "13:10"},
+            {"phen": "Set",                  "time": "19:38"},
+            {"phen": "End Civil Twilight",   "time": "20:05"}
+          ],
+          "moondata": [
+            {"phen": "Rise", "time": "14:38"}
+          ]
+        }
+      }
+    }
+  ''', 200));
+}
+
+Future<ForecastProvider> _makeProvider({http.Client? usnoClient}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   return ForecastProvider(
     nwsService: NwsService(client: _makeNwsClient()),
     nominatimService: NominatimService(client: _makeNominatimClient()),
     cacheService: CacheService(prefs),
+    usnoService: UsnoService(client: usnoClient ?? _makeUsnoClient()),
     prefs: prefs,
   );
 }
@@ -85,11 +111,27 @@ void main() {
           client: MockClient((_) async => http.Response('[]', 200)),
         ),
         cacheService: CacheService(prefs),
+        usnoService: UsnoService(client: _makeUsnoClient()),
       );
 
       await provider.searchLocation('xyzxyz');
       expect(provider.errorMessage, contains('not found'));
       expect(provider.currentLocation, isNull);
+    });
+  });
+
+  group('ForecastProvider astro data', () {
+    test('cachedAstroData populated after searchLocation', () async {
+      final provider = await _makeProvider();
+      await provider.searchLocation('Bishop, CA');
+
+      expect(provider.currentLocation!.cachedAstroData, isNotEmpty);
+      expect(provider.currentLocation!.cachedAstroData.first, isA<AstroDay>());
+    });
+
+    test('kRowAstro defaults to false', () async {
+      final provider = await _makeProvider();
+      expect(provider.visibleRows[kRowAstro], isFalse);
     });
   });
 

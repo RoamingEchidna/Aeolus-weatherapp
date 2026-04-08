@@ -5,11 +5,13 @@ import '../models/saved_location.dart';
 import '../services/nominatim_service.dart';
 import '../services/nws_service.dart';
 import '../services/cache_service.dart';
+import '../services/usno_service.dart';
 
 class ForecastProvider extends ChangeNotifier {
   final NwsService _nwsService;
   final NominatimService _nominatimService;
   final CacheService _cacheService;
+  final UsnoService _usnoService;
   final SharedPreferences? _prefs;
 
   SavedLocation? currentLocation;
@@ -23,10 +25,12 @@ class ForecastProvider extends ChangeNotifier {
     required NwsService nwsService,
     required NominatimService nominatimService,
     required CacheService cacheService,
+    required UsnoService usnoService,
     SharedPreferences? prefs,
   })  : _nwsService = nwsService,
         _nominatimService = nominatimService,
         _cacheService = cacheService,
+        _usnoService = usnoService,
         _prefs = prefs;
 
   Future<void> init() async {
@@ -102,6 +106,19 @@ class ForecastProvider extends ChangeNotifier {
       String displayName, double lat, double lon) async {
     final result = await _nwsService.fetchForecast(lat, lon);
     final now = DateTime.now();
+
+    final windowStart = result.periods.first.startTime.toLocal();
+    final windowEnd   = result.periods.last.startTime.toLocal();
+    final tzOffset    = now.timeZoneOffset.inHours;
+
+    final astroDays = await _usnoService.fetchAstroData(
+      lat: lat,
+      lon: lon,
+      windowStart: windowStart,
+      windowEnd: windowEnd,
+      tzOffsetHours: tzOffset,
+    );
+
     final location = SavedLocation(
       displayName: result.locationName,
       lat: lat,
@@ -110,6 +127,7 @@ class ForecastProvider extends ChangeNotifier {
       cachedForecast: result.periods,
       cachedAlerts: result.alerts,
       cacheTimestamp: now,
+      cachedAstroData: astroDays,
     );
 
     savedLocations = _cacheService.addOrUpdate(savedLocations, location);

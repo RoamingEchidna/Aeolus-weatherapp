@@ -7,6 +7,7 @@ import 'providers/forecast_provider.dart';
 import 'services/nws_service.dart';
 import 'services/nominatim_service.dart';
 import 'services/cache_service.dart';
+import 'services/usno_service.dart';
 import 'ui/chart_screen.dart';
 
 void main() async {
@@ -18,6 +19,7 @@ void main() async {
     nwsService: NwsService(client: client),
     nominatimService: NominatimService(client: client),
     cacheService: CacheService(prefs),
+    usnoService: UsnoService(client: http.Client()),
     prefs: prefs,
   );
   await provider.init();
