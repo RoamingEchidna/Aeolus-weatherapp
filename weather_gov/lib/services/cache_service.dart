@@ -39,8 +39,13 @@ class CacheService {
     updated.add(incoming);
 
     if (updated.length > kMaxSavedLocations) {
-      updated.sort((a, b) => a.lastAccessed.compareTo(b.lastAccessed));
-      updated.removeAt(0); // remove oldest
+      // Evict oldest unpinned first; fall back to oldest pinned if all are pinned.
+      final unpinned = updated.where((l) => !l.isPinned).toList()
+        ..sort((a, b) => a.lastAccessed.compareTo(b.lastAccessed));
+      final victim = unpinned.isNotEmpty
+          ? unpinned.first
+          : (updated..sort((a, b) => a.lastAccessed.compareTo(b.lastAccessed))).first;
+      updated.remove(victim);
     }
 
     return updated;

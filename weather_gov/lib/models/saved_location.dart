@@ -11,6 +11,7 @@ class SavedLocation {
   final List<WeatherAlert> cachedAlerts;
   final DateTime cacheTimestamp;
   final List<AstroDay> cachedAstroData;
+  final bool isPinned;
 
   const SavedLocation({
     required this.displayName,
@@ -21,6 +22,7 @@ class SavedLocation {
     required this.cachedAlerts,
     required this.cacheTimestamp,
     this.cachedAstroData = const [],
+    this.isPinned = false,
   });
 
   SavedLocation copyWith({
@@ -32,6 +34,7 @@ class SavedLocation {
     List<WeatherAlert>? cachedAlerts,
     DateTime? cacheTimestamp,
     List<AstroDay>? cachedAstroData,
+    bool? isPinned,
   }) {
     return SavedLocation(
       displayName: displayName ?? this.displayName,
@@ -42,6 +45,7 @@ class SavedLocation {
       cachedAlerts: cachedAlerts ?? this.cachedAlerts,
       cacheTimestamp: cacheTimestamp ?? this.cacheTimestamp,
       cachedAstroData: cachedAstroData ?? this.cachedAstroData,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 
@@ -58,12 +62,12 @@ class SavedLocation {
           .map((e) => WeatherAlert.fromStoredJson(e as Map<String, dynamic>))
           .toList(),
       cacheTimestamp: DateTime.parse(json['cacheTimestamp'] as String),
-      // Gracefully handle old cached entries that predate this field.
       cachedAstroData: json.containsKey('cachedAstroData')
           ? (json['cachedAstroData'] as List<dynamic>)
               .map((e) => AstroDay.fromStoredJson(e as Map<String, dynamic>))
               .toList()
           : [],
+      isPinned: json.containsKey('isPinned') && json['isPinned'] == true,
     );
   }
 
@@ -76,5 +80,6 @@ class SavedLocation {
         'cachedAlerts': cachedAlerts.map((a) => a.toJson()).toList(),
         'cacheTimestamp': cacheTimestamp.toIso8601String(),
         'cachedAstroData': cachedAstroData.map((d) => d.toJson()).toList(),
+        'isPinned': isPinned,
       };
 }

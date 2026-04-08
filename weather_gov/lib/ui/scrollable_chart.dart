@@ -67,11 +67,23 @@ class ScrollableChart extends StatefulWidget {
 class _ScrollableChartState extends State<ScrollableChart> {
   late double _cursorX;
   bool _cursorDragging = false;
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _cursorX = _initCursorX();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(kLabelColumnWidth);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   double _initCursorX() {
@@ -85,6 +97,12 @@ class _ScrollableChartState extends State<ScrollableChart> {
   int get _cursorIndex =>
       (_cursorX / kPixelsPerHour).round().clamp(0, widget.periods.length - 1);
 
+  DateTime get _cursorTime {
+    final windowStart = widget.periods[0].startTime.toLocal();
+    final minutes = (_cursorX / kPixelsPerHour * 60).round();
+    return windowStart.add(Duration(minutes: minutes));
+  }
+
   @override
   Widget build(BuildContext context) {
     final periods = widget.periods;
@@ -93,7 +111,7 @@ class _ScrollableChartState extends State<ScrollableChart> {
     final textTheme = Theme.of(context).textTheme;
     final surfaceColor = Theme.of(context).colorScheme.surface;
     final rowBorderColor = Theme.of(context).colorScheme.outline;
-    final rowHeight = MediaQuery.of(context).size.height * 0.20;
+    final rowHeight = (MediaQuery.of(context).size.height * 0.20).floorToDouble();
 
     final astroDays = provider.currentLocation?.cachedAstroData ?? [];
     final rows = _buildRows(periods, visible, rowHeight, astroDays);
@@ -199,10 +217,14 @@ class _ScrollableChartState extends State<ScrollableChart> {
           top: 0,
           bottom: _kValuePanelHeight,
           child: SingleChildScrollView(
+            controller: _scrollController,
             scrollDirection: Axis.horizontal,
-            padding:
-                const EdgeInsets.symmetric(horizontal: kPixelsPerHour),
+            padding: const EdgeInsets.only(
+              left: kLabelColumnWidth + kPixelsPerHour,
+              right: kPixelsPerHour + kLabelColumnWidth,
+            ),
             child: GestureDetector(
+              onDoubleTap: () => setState(() => _cursorX = _initCursorX()),
               onLongPressStart: (details) {
                 setState(() {
                   _cursorX = details.localPosition.dx.clamp(0.0, chartContentWidth.toDouble());
@@ -219,6 +241,7 @@ class _ScrollableChartState extends State<ScrollableChart> {
               child: SizedBox(
               width: chartContentWidth,
               child: Stack(
+                clipBehavior: Clip.hardEdge,
                 children: [
                   // Chart content column.
                   Column(
@@ -300,14 +323,14 @@ class _ScrollableChartState extends State<ScrollableChart> {
           right: 0,
           bottom: 0,
           height: _kValuePanelHeight,
-          child: _buildValuePanel(context, periods[_cursorIndex], visible),
+          child: _buildValuePanel(context, periods[_cursorIndex], visible, _cursorTime),
         ),
       ],
     );
   }
 
   Widget _buildValuePanel(
-      BuildContext context, HourlyPeriod p, Map<String, bool> visible) {
+      BuildContext context, HourlyPeriod p, Map<String, bool> visible, DateTime cursorTime) {
     final textTheme = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     final brightness = Theme.of(context).brightness;
@@ -337,7 +360,7 @@ class _ScrollableChartState extends State<ScrollableChart> {
 
     // Line 1: time + temperature group.
     final line1 = <Widget>[];
-    line1.add(cell(timeFmt.format(p.startTime.toLocal()), scheme.onSurface, 82));
+    line1.add(cell(timeFmt.format(cursorTime), scheme.onSurface, 82));
     if (visible[kRowTempGroup] == true) {
       line1.add(sep());
       line1.add(cell('${p.temperature}°', kColorTemperature, 36));

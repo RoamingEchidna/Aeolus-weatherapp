@@ -18,6 +18,7 @@ class ForecastProvider extends ChangeNotifier {
   List<SavedLocation> savedLocations = [];
   Map<String, bool> visibleRows = Map.from(kDefaultRowVisibility);
   bool isDarkMode = false;
+  bool syncPinnedOnOpen = false;
   bool isLoading = false;
   String? errorMessage;
 
@@ -36,16 +37,48 @@ class ForecastProvider extends ChangeNotifier {
   Future<void> init() async {
     savedLocations = _cacheService.loadAll();
     if (savedLocations.isNotEmpty) {
-      savedLocations.sort((a, b) => b.lastAccessed.compareTo(a.lastAccessed));
+      _sortLocations();
       currentLocation = savedLocations.first;
     }
     _loadPreferences();
+    notifyListeners();
+    if (syncPinnedOnOpen) _syncPinned();
+  }
+
+  void _sortLocations() {
+    savedLocations.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.lastAccessed.compareTo(a.lastAccessed);
+    });
+  }
+
+  Future<void> _syncPinned() async {
+    final now = DateTime.now();
+    final stale = savedLocations
+        .where((l) => l.isPinned && now.difference(l.cacheTimestamp).inMinutes >= 60)
+        .toList();
+    if (stale.isEmpty) return;
+    // Current location first (if in the stale list), then the rest.
+    final current = currentLocation;
+    final ordered = [
+      if (current != null && stale.any((l) => l.displayName == current.displayName)) current,
+      ...stale.where((l) => l.displayName != current?.displayName),
+    ];
+    isLoading = true;
+    notifyListeners();
+    for (final loc in ordered) {
+      try {
+        await _fetchAndSave(loc.displayName, loc.lat, loc.lon);
+      } catch (_) {}
+    }
+    isLoading = false;
     notifyListeners();
   }
 
   void _loadPreferences() {
     if (_prefs == null) return;
     isDarkMode = _prefs.getBool('isDarkMode') ?? false;
+    syncPinnedOnOpen = _prefs.getBool('syncPinnedOnOpen') ?? false;
     for (final row in kAllRows) {
       final saved = _prefs.getBool('row_$row');
       if (saved != null) visibleRows[row] = saved;
@@ -55,6 +88,7 @@ class ForecastProvider extends ChangeNotifier {
   void _savePreferences() {
     if (_prefs == null) return;
     _prefs.setBool('isDarkMode', isDarkMode);
+    _prefs.setBool('syncPinnedOnOpen', syncPinnedOnOpen);
     for (final entry in visibleRows.entries) {
       _prefs.setBool('row_${entry.key}', entry.value);
     }
@@ -104,20 +138,26 @@ class ForecastProvider extends ChangeNotifier {
 
   Future<void> _fetchAndSave(
       String displayName, double lat, double lon) async {
-    final result = await _nwsService.fetchForecast(lat, lon);
     final now = DateTime.now();
+    final tzOffset = now.timeZoneOffset.inHours;
 
-    final windowStart = result.periods.first.startTime.toLocal();
-    final windowEnd   = result.periods.last.startTime.toLocal();
-    final tzOffset    = now.timeZoneOffset.inHours;
-
-    final astroDays = await _usnoService.fetchAstroData(
+    // Fire both requests in parallel. USNO uses estimated window (now to now+7d)
+    // which matches the NWS forecast window closely enough.
+    final nwsFuture = _nwsService.fetchForecast(lat, lon);
+    final astroFuture = _usnoService.fetchAstroData(
       lat: lat,
       lon: lon,
-      windowStart: windowStart,
-      windowEnd: windowEnd,
+      windowStart: now,
+      windowEnd: now.add(const Duration(days: 7)),
       tzOffsetHours: tzOffset,
     );
+
+    final result = await nwsFuture;
+    final astroDays = await astroFuture;
+
+    final existing = savedLocations
+        .where((l) => l.displayName == result.locationName)
+        .firstOrNull;
 
     final location = SavedLocation(
       displayName: result.locationName,
@@ -128,9 +168,11 @@ class ForecastProvider extends ChangeNotifier {
       cachedAlerts: result.alerts,
       cacheTimestamp: now,
       cachedAstroData: astroDays,
+      isPinned: existing?.isPinned ?? false,
     );
 
     savedLocations = _cacheService.addOrUpdate(savedLocations, location);
+    _sortLocations();
     _cacheService.saveAll(savedLocations);
     currentLocation = location;
   }
@@ -139,6 +181,27 @@ class ForecastProvider extends ChangeNotifier {
     currentLocation = location.copyWith(lastAccessed: DateTime.now());
     savedLocations =
         _cacheService.addOrUpdate(savedLocations, currentLocation!);
+    _sortLocations();
+    _cacheService.saveAll(savedLocations);
+    notifyListeners();
+  }
+
+  void pinLocation(String displayName) {
+    savedLocations = savedLocations.map((l) {
+      if (l.displayName != displayName) return l;
+      return l.copyWith(isPinned: !l.isPinned);
+    }).toList();
+    _sortLocations();
+    _cacheService.saveAll(savedLocations);
+    notifyListeners();
+  }
+
+  void deleteLocation(String displayName) {
+    savedLocations =
+        savedLocations.where((l) => l.displayName != displayName).toList();
+    if (currentLocation?.displayName == displayName) {
+      currentLocation = savedLocations.firstOrNull;
+    }
     _cacheService.saveAll(savedLocations);
     notifyListeners();
   }
@@ -151,6 +214,12 @@ class ForecastProvider extends ChangeNotifier {
 
   void toggleDarkMode() {
     isDarkMode = !isDarkMode;
+    _savePreferences();
+    notifyListeners();
+  }
+
+  void toggleSyncPinnedOnOpen() {
+    syncPinnedOnOpen = !syncPinnedOnOpen;
     _savePreferences();
     notifyListeners();
   }

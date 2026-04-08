@@ -56,60 +56,66 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
 
-            // Past Locations dropdown
-            if (provider.savedLocations.isNotEmpty)
+            const SizedBox(height: 5),
+
+            // Past locations list
+            if (provider.savedLocations.isNotEmpty) ...[
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Past Locations',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  ),
-                  child: DropdownButton<String>(
-                    value: provider.currentLocation?.displayName,
-                    isExpanded: true,
-                    underline: const SizedBox.shrink(),
-                    isDense: true,
-                    items: provider.savedLocations
-                        .map((loc) => DropdownMenuItem(
-                              value: loc.displayName,
-                              child: Text(loc.displayName,
-                                  overflow: TextOverflow.ellipsis),
-                            ))
-                        .toList(),
-                    onChanged: (name) {
-                      if (name == null) return;
-                      final loc = provider.savedLocations
-                          .firstWhere((l) => l.displayName == name);
-                      Navigator.pop(context);
-                      provider.selectLocation(loc);
-                    },
-                  ),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                child: Text('Past Locations',
+                    style: Theme.of(context).textTheme.labelSmall),
+              ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 480),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: provider.savedLocations.length,
+                  itemBuilder: (context, i) {
+                    final loc = provider.savedLocations[i];
+                    final isCurrent =
+                        loc.displayName == provider.currentLocation?.displayName;
+                    return ListTile(
+                      dense: true,
+                      selected: isCurrent,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 4),
+                      leading: IconButton(
+                        icon: Icon(
+                          loc.isPinned
+                              ? Icons.push_pin
+                              : Icons.push_pin_outlined,
+                          size: 18,
+                        ),
+                        tooltip: loc.isPinned ? 'Unpin' : 'Pin',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () => provider.pinLocation(loc.displayName),
+                      ),
+                      title: Text(
+                        loc.displayName,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Remove',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: () {
+                          provider.deleteLocation(loc.displayName);
+                          if (isCurrent) Navigator.pop(context);
+                        },
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        provider.selectLocation(loc);
+                      },
+                    );
+                  },
                 ),
               ),
-
-            // Grab new data button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: FilledButton.tonal(
-                onPressed:
-                    provider.isLoading || provider.currentLocation == null
-                        ? null
-                        : () {
-                            Navigator.pop(context);
-                            provider.refreshCurrentLocation();
-                          },
-                child: provider.isLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Grab new data'),
-              ),
-            ),
+            ],
 
             const Divider(height: 24),
 
@@ -129,7 +135,55 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
 
-            const Divider(height: 1),
+            const Divider(height: 16),
+
+            // Auto Sync toggle + manual refresh button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: SwitchListTile(
+                dense: true,
+                value: provider.syncPinnedOnOpen,
+                onChanged: (_) => provider.toggleSyncPinnedOnOpen(),
+                title: Row(
+                  children: [
+                    Text('Auto Sync',
+                        style: Theme.of(context).textTheme.bodyMedium),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: provider.isLoading || provider.currentLocation == null
+                          ? null
+                          : () {
+                              Navigator.pop(context);
+                              provider.refreshCurrentLocation();
+                            },
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: provider.isLoading || provider.currentLocation == null
+                              ? Theme.of(context).disabledColor
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                        child: provider.isLoading
+                            ? Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Theme.of(context).colorScheme.onPrimary,
+                                ),
+                              )
+                            : Icon(
+                                Icons.sync,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
             // Dark mode toggle
             Padding(

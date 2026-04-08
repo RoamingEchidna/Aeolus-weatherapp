@@ -31,11 +31,11 @@ const Color kLightOutline                  = Color(0xFF89A8B2);
 const Color kLightOnSurface                = Color(0xFF074F57);
 
 // Theme palette — dark mode
-const Color kDarkSurface                   = Color(0xFF1A2020);
-const Color kDarkSurfaceContainerHighest   = Color(0xFF2C3333);
-const Color kDarkPanelBackground           = Color(0xFF2E4F4F);
-const Color kDarkOutline                   = Color(0xFF0E8388);
-const Color kDarkOnSurface                 = Color(0xFFCBE4DE);
+const Color kDarkSurface                   = Color(0xFF2D2D2D);
+const Color kDarkSurfaceContainerHighest   = Color(0xFF6A876A);
+const Color kDarkPanelBackground           = Color(0xFF82AA82);
+const Color kDarkOutline                   = Color(0xFF99CC99);
+const Color kDarkOnSurface                 = Color(0xFFFED9B7);
 
 // Cursor color
 const Color kColorCursor = Color(0xFFFDD835);
@@ -47,11 +47,11 @@ const Color kColorAlertModerate = Color(0xFFF57C00);
 const Color kColorAlertMinor    = Color(0xFFF9A825);
 
 // Astronomical row colors
-const Color kColorAstroNight          = Color(0xFF0D0A1B);
-const Color kColorAstroCivilTwilight  = Color(0xFF2A2347);
+const Color kColorAstroNight          = Color(0xFF1A1725);
+const Color kColorAstroCivilTwilight  = Color(0xFF443A6C);
 const Color kColorAstroDay            = Color(0xFFECE557);
-const Color kColorAstroNoon           = Color(0xFFED7B58);
-const Color kColorAstroMoonUp         = Color(0xFFB7C3C9);
+const Color kColorAstroNoon           = Color(0xFFE07A5F);
+const Color kColorAstroMoonUp         = Color(0xFF92ACBA);
 
 // Row group names
 const String kRowTempGroup   = 'Temp & Dew';
