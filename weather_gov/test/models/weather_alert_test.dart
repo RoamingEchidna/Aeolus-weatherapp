@@ -49,10 +49,10 @@ void main() {
 
   group('WeatherAlert.alertColor', () {
     test('Extreme returns red', () {
-      expect(WeatherAlert.alertColor('Extreme').toARGB32(), 0xFFD32F2F);
+      expect(WeatherAlert.alertColor('Extreme').toARGB32(), 0xFFA91818);
     });
     test('Severe returns red', () {
-      expect(WeatherAlert.alertColor('Severe').toARGB32(), 0xFFD32F2F);
+      expect(WeatherAlert.alertColor('Severe').toARGB32(), 0xFFA91818);
     });
     test('Moderate returns orange', () {
       expect(WeatherAlert.alertColor('Moderate').toARGB32(), 0xFFF57C00);

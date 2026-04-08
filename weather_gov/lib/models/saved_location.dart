@@ -1,5 +1,6 @@
 import 'hourly_period.dart';
 import 'weather_alert.dart';
+import 'astro_day.dart';
 
 class SavedLocation {
   final String displayName;
@@ -9,6 +10,7 @@ class SavedLocation {
   final List<HourlyPeriod> cachedForecast;
   final List<WeatherAlert> cachedAlerts;
   final DateTime cacheTimestamp;
+  final List<AstroDay> cachedAstroData;
 
   const SavedLocation({
     required this.displayName,
@@ -18,6 +20,7 @@ class SavedLocation {
     required this.cachedForecast,
     required this.cachedAlerts,
     required this.cacheTimestamp,
+    this.cachedAstroData = const [],
   });
 
   SavedLocation copyWith({
@@ -28,6 +31,7 @@ class SavedLocation {
     List<HourlyPeriod>? cachedForecast,
     List<WeatherAlert>? cachedAlerts,
     DateTime? cacheTimestamp,
+    List<AstroDay>? cachedAstroData,
   }) {
     return SavedLocation(
       displayName: displayName ?? this.displayName,
@@ -37,6 +41,7 @@ class SavedLocation {
       cachedForecast: cachedForecast ?? this.cachedForecast,
       cachedAlerts: cachedAlerts ?? this.cachedAlerts,
       cacheTimestamp: cacheTimestamp ?? this.cacheTimestamp,
+      cachedAstroData: cachedAstroData ?? this.cachedAstroData,
     );
   }
 
@@ -53,6 +58,12 @@ class SavedLocation {
           .map((e) => WeatherAlert.fromStoredJson(e as Map<String, dynamic>))
           .toList(),
       cacheTimestamp: DateTime.parse(json['cacheTimestamp'] as String),
+      // Gracefully handle old cached entries that predate this field.
+      cachedAstroData: json.containsKey('cachedAstroData')
+          ? (json['cachedAstroData'] as List<dynamic>)
+              .map((e) => AstroDay.fromStoredJson(e as Map<String, dynamic>))
+              .toList()
+          : [],
     );
   }
 
@@ -64,5 +75,6 @@ class SavedLocation {
         'cachedForecast': cachedForecast.map((p) => p.toJson()).toList(),
         'cachedAlerts': cachedAlerts.map((a) => a.toJson()).toList(),
         'cacheTimestamp': cacheTimestamp.toIso8601String(),
+        'cachedAstroData': cachedAstroData.map((d) => d.toJson()).toList(),
       };
 }
