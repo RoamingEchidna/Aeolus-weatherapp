@@ -46,17 +46,26 @@ const Color kColorAlertSevere   = Color(0xFFA91818);
 const Color kColorAlertModerate = Color(0xFFF57C00);
 const Color kColorAlertMinor    = Color(0xFFF9A825);
 
+// Astronomical row colors
+const Color kColorAstroNight          = Color(0xFF0D0A1B);
+const Color kColorAstroCivilTwilight  = Color(0xFF2A2347);
+const Color kColorAstroDay            = Color(0xFFECE557);
+const Color kColorAstroNoon           = Color(0xFFED7B58);
+const Color kColorAstroMoonUp         = Color(0xFFB7C3C9);
+
 // Row group names
 const String kRowTempGroup   = 'Temp & Dew';
 const String kRowWindGroup   = 'Wind';
 const String kRowAtmosGroup  = 'RH / Precip';
 const String kRowConditions  = 'Conditions';
+const String kRowAstro       = 'Astronomical';
 
 const List<String> kAllRows = [
   kRowTempGroup,
   kRowWindGroup,
   kRowAtmosGroup,
   kRowConditions,
+  kRowAstro,
 ];
 
 const Map<String, bool> kDefaultRowVisibility = {
@@ -64,4 +73,5 @@ const Map<String, bool> kDefaultRowVisibility = {
   kRowWindGroup:  true,
   kRowAtmosGroup: true,
   kRowConditions: true,
+  kRowAstro:      false,
 };
