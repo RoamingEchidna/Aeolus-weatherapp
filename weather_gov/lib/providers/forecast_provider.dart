@@ -1,17 +1,20 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
+import '../models/hourly_period.dart';
 import '../models/saved_location.dart';
 import '../services/nominatim_service.dart';
 import '../services/nws_service.dart';
 import '../services/cache_service.dart';
 import '../services/usno_service.dart';
+import '../services/openuv_service.dart';
 
 class ForecastProvider extends ChangeNotifier {
   final NwsService _nwsService;
   final NominatimService _nominatimService;
   final CacheService _cacheService;
   final UsnoService _usnoService;
+  final OpenUvService _openUvService;
   final SharedPreferences? _prefs;
 
   SavedLocation? currentLocation;
@@ -27,11 +30,13 @@ class ForecastProvider extends ChangeNotifier {
     required NominatimService nominatimService,
     required CacheService cacheService,
     required UsnoService usnoService,
+    required OpenUvService epaUvService,
     SharedPreferences? prefs,
   })  : _nwsService = nwsService,
         _nominatimService = nominatimService,
         _cacheService = cacheService,
         _usnoService = usnoService,
+        _openUvService = epaUvService,
         _prefs = prefs;
 
   Future<void> init() async {
@@ -68,7 +73,7 @@ class ForecastProvider extends ChangeNotifier {
     notifyListeners();
     for (final loc in ordered) {
       try {
-        await _fetchAndSave(loc.displayName, loc.lat, loc.lon);
+        await _fetchAndSave(loc.displayName, loc.lat, loc.lon, postcode: loc.postcode);
       } catch (_) {}
     }
     isLoading = false;
@@ -105,7 +110,7 @@ class ForecastProvider extends ChangeNotifier {
         errorMessage = 'Location not found';
         return;
       }
-      await _fetchAndSave(geo.displayName, geo.lat, geo.lon);
+      await _fetchAndSave(geo.displayName, geo.lat, geo.lon, postcode: geo.postcode);
     } catch (e) {
       errorMessage = 'Error: $e';
     } finally {
@@ -125,6 +130,7 @@ class ForecastProvider extends ChangeNotifier {
         currentLocation!.displayName,
         currentLocation!.lat,
         currentLocation!.lon,
+        postcode: currentLocation!.postcode,
       );
     } on NwsUnsupportedLocationException catch (e) {
       errorMessage = e.toString();
@@ -137,38 +143,73 @@ class ForecastProvider extends ChangeNotifier {
   }
 
   Future<void> _fetchAndSave(
-      String displayName, double lat, double lon) async {
+      String displayName, double lat, double lon, {String? postcode}) async {
     final now = DateTime.now();
-    final tzOffset = now.timeZoneOffset.inHours;
 
-    // Fire both requests in parallel. USNO uses estimated window (now to now+7d)
-    // which matches the NWS forecast window closely enough.
-    final nwsFuture = _nwsService.fetchForecast(lat, lon);
-    final astroFuture = _usnoService.fetchAstroData(
+    // Fetch NWS and astro data (USNO needs tzOffset so it runs after NWS).
+    final result = await _nwsService.fetchForecast(lat, lon);
+    final rawAstroDays = await _usnoService.fetchAstroData(
       lat: lat,
       lon: lon,
       windowStart: now,
       windowEnd: now.add(const Duration(days: 7)),
-      tzOffsetHours: tzOffset,
+      tzOffsetHours: result.tzOffsetHours,
     );
 
-    final result = await nwsFuture;
-    final astroDays = await astroFuture;
-
-    final existing = savedLocations
+    // Build existing UV map from cached astro data.
+    final cachedLocation = savedLocations
         .where((l) => l.displayName == result.locationName)
         .firstOrNull;
+    final existingUv = <String, int>{};
+    if (cachedLocation != null) {
+      for (final d in cachedLocation.cachedAstroData) {
+        if (d.uvIndex != null) {
+          final k = '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
+          existingUv[k] = d.uvIndex!;
+        }
+      }
+    }
+
+    // Fetch UV — only missing days + today.
+    final uvMap = await _openUvService.fetchUvForWindow(
+      lat: lat,
+      lon: lon,
+      existing: existingUv,
+      windowStart: now,
+    );
+
+    final astroDays = rawAstroDays.map((d) {
+      final key =
+          '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
+      final uv = uvMap[key];
+      return uv != null ? d.copyWith(uvIndex: uv) : d;
+    }).toList();
+
+    // Prepend cached periods from the past 24 hours that predate the new fetch.
+    final lookback = now.subtract(const Duration(hours: 24));
+    final newStart = result.periods.isNotEmpty
+        ? result.periods.first.startTime
+        : now;
+    final yesterdayPeriods = cachedLocation != null
+        ? cachedLocation.cachedForecast
+            .where((p) =>
+                !p.startTime.isBefore(lookback) &&
+                p.startTime.isBefore(newStart))
+            .toList()
+        : <HourlyPeriod>[];
+    final mergedPeriods = [...yesterdayPeriods, ...result.periods];
 
     final location = SavedLocation(
       displayName: result.locationName,
       lat: lat,
       lon: lon,
       lastAccessed: now,
-      cachedForecast: result.periods,
+      cachedForecast: mergedPeriods,
       cachedAlerts: result.alerts,
       cacheTimestamp: now,
       cachedAstroData: astroDays,
-      isPinned: existing?.isPinned ?? false,
+      isPinned: cachedLocation?.isPinned ?? false,
+      postcode: postcode ?? cachedLocation?.postcode,
     );
 
     savedLocations = _cacheService.addOrUpdate(savedLocations, location);

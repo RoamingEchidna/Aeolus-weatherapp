@@ -9,11 +9,11 @@ const int kMaxSavedLocations = 10;
 
 // Chart colors
 const Color kColorTemperature = Color(0xFFFF0000);
-const Color kColorWindChill   = Color(0xFF0000CC);
+const Color kColorWindChill   = Color(0xFF1774FF);
 const Color kColorDewpoint    = Color(0xFF009900);
-const Color kColorHumidity    = Color(0xFF178017);
-const Color kColorPrecip      = Color(0xFF0000CC);
-const Color kColorSkycover    = Color(0xFF1B66B0);
+const Color kColorHumidity    = Color(0xFFEB815E);
+const Color kColorPrecip      = Color(0xFF1774FF);
+const Color kColorSkycover    = Color(0xFF4DC0C4);
 const Color kColorWind        = Color(0xFF990099); // wind barb color
 
 // Weather type colors (Conditions row)
@@ -53,19 +53,28 @@ const Color kColorAstroDay            = Color(0xFFECE557);
 const Color kColorAstroNoon           = Color(0xFFE07A5F);
 const Color kColorAstroMoonUp         = Color(0xFF92ACBA);
 
+/// Returns [base] unchanged in light mode; desaturates it 50% in dark mode.
+Color adaptiveChartColor(Color base, Brightness brightness) {
+  if (brightness == Brightness.light) return base;
+  final hsl = HSLColor.fromColor(base);
+  return hsl.withSaturation((hsl.saturation * 0.75).clamp(0.0, 1.0)).toColor();
+}
+
 // Row group names
 const String kRowTempGroup   = 'Temp & Dew';
 const String kRowWindGroup   = 'Wind';
 const String kRowAtmosGroup  = 'RH / Precip';
 const String kRowConditions  = 'Conditions';
-const String kRowAstro       = 'Astronomical';
+const String kRowSolar       = 'Solar';
+const String kRowLunar       = 'Lunar';
 
 const List<String> kAllRows = [
   kRowTempGroup,
   kRowWindGroup,
   kRowAtmosGroup,
   kRowConditions,
-  kRowAstro,
+  kRowSolar,
+  kRowLunar,
 ];
 
 const Map<String, bool> kDefaultRowVisibility = {
@@ -73,5 +82,6 @@ const Map<String, bool> kDefaultRowVisibility = {
   kRowWindGroup:  true,
   kRowAtmosGroup: true,
   kRowConditions: true,
-  kRowAstro:      false,
+  kRowSolar:      false,
+  kRowLunar:      false,
 };

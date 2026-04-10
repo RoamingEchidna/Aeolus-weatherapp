@@ -7,11 +7,13 @@ class NwsForecastResult {
   final String locationName;
   final List<HourlyPeriod> periods;
   final List<WeatherAlert> alerts;
-
+  /// UTC offset in whole hours for the forecast location (e.g. -7 for PDT).
+  final int tzOffsetHours;
   const NwsForecastResult({
     required this.locationName,
     required this.periods,
     required this.alerts,
+    required this.tzOffsetHours,
   });
 }
 
@@ -56,13 +58,13 @@ class NwsService {
 
     // Steps 2 & 3 fire in parallel
     final alertsUri = Uri.parse('$_base/alerts/active?point=$lat,$lon');
-    final results = await Future.wait([
+    final coreResults = await Future.wait([
       _client.get(Uri.parse(hourlyUrl), headers: _headers),
       _client.get(alertsUri, headers: _headers),
     ]);
 
-    final hourlyResp = results[0];
-    final alertsResp = results[1];
+    final hourlyResp = coreResults[0];
+    final alertsResp = coreResults[1];
 
     if (hourlyResp.statusCode != 200) {
       throw Exception('NWS hourly error: ${hourlyResp.statusCode}');
@@ -75,6 +77,22 @@ class NwsService {
     final periods = periodsJson
         .map((e) => HourlyPeriod.fromJson(e as Map<String, dynamic>))
         .toList();
+
+    // Extract the location's UTC offset from the first period's startTime string
+    // (e.g. "2024-04-09T14:00:00-07:00" → -7). Falls back to 0 if unparseable.
+    int tzOffsetHours = 0;
+    if (periodsJson.isNotEmpty) {
+      final startTimeStr =
+          (periodsJson.first as Map<String, dynamic>)['startTime'] as String?;
+      if (startTimeStr != null) {
+        final match =
+            RegExp(r'([+-])(\d{2}):\d{2}$').firstMatch(startTimeStr);
+        if (match != null) {
+          final sign = match.group(1) == '-' ? -1 : 1;
+          tzOffsetHours = sign * int.parse(match.group(2)!);
+        }
+      }
+    }
 
     // Alerts are non-critical — suppress errors
     List<WeatherAlert> alerts = [];
@@ -90,6 +108,7 @@ class NwsService {
       locationName: locationName,
       periods: periods,
       alerts: alerts,
+      tzOffsetHours: tzOffsetHours,
     );
   }
 }
