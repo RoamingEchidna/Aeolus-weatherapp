@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../constants.dart';
 import '../../models/hourly_period.dart';
+import '../chart_scale.dart';
 
 class ChartSeries {
   final Color color;
@@ -12,7 +12,6 @@ class ChartSeries {
 class MultiLineChartRow extends StatelessWidget {
   final List<HourlyPeriod> periods;
   final List<ChartSeries> series;
-  // If null, bounds are auto-computed from data with padding.
   final double? minY;
   final double? maxY;
   final double height;
@@ -28,8 +27,8 @@ class MultiLineChartRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gridColor =
-        Theme.of(context).colorScheme.outline.withAlpha(70);
+    final gridColor = Theme.of(context).colorScheme.outline.withAlpha(70);
+    final pph = ChartScale.of(context).pixelsPerHour;
 
     // Compute bounds from all series when not provided.
     double lo = minY ?? double.infinity;
@@ -42,12 +41,10 @@ class MultiLineChartRow extends StatelessWidget {
           if (maxY == null && v > hi) hi = v;
         }
       }
-      // Add a little breathing room.
       if (minY == null) lo = (lo - 4).floorToDouble();
       if (maxY == null) hi = (hi + 4).ceilToDouble();
     }
 
-    // Choose a grid interval that gives ~3–5 horizontal lines.
     final range = hi - lo;
     final hInterval = range > 80
         ? 20.0
@@ -57,56 +54,110 @@ class MultiLineChartRow extends StatelessWidget {
                 ? 5.0
                 : 2.0;
 
-    // Indices where a new calendar day starts (for vertical day-boundary lines).
     final dayBounds = <int>{};
     for (int i = 0; i < periods.length; i++) {
       if (periods[i].startTime.toLocal().hour == 0) dayBounds.add(i);
     }
 
-    final lineBars = series.map((s) {
-      final spots = List.generate(
-        periods.length,
-        // Offset by 0.5 so each point sits at the centre of its 24px hour cell,
-        // matching WindBarbRow which draws at i*kPixelsPerHour + kPixelsPerHour/2.
-        (i) => FlSpot(i + 0.5, s.valueSelector(periods[i])),
-      );
-      return LineChartBarData(
-        spots: spots,
-        isCurved: true,
-        color: s.color,
-        barWidth: 2.5,
-        dotData: const FlDotData(show: false),
-        belowBarData: BarAreaData(show: false),
-      );
-    }).toList();
-
     return SizedBox(
-      width: periods.length * kPixelsPerHour,
+      width: periods.length * pph,
       height: height,
-      child: LineChart(
-        LineChartData(
-          minX: 0,
-          maxX: periods.length.toDouble(),
+      child: CustomPaint(
+        painter: _MultiLinePainter(
+          periods: periods,
+          series: series,
           minY: lo,
           maxY: hi,
-          lineBarsData: lineBars,
-          titlesData: const FlTitlesData(show: false),
-          borderData: FlBorderData(show: false),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: true,
-            verticalInterval: 1.0,
-            drawHorizontalLine: true,
-            horizontalInterval: hInterval,
-            getDrawingHorizontalLine: (_) =>
-                FlLine(color: gridColor, strokeWidth: 0.5),
-            getDrawingVerticalLine: (value) => dayBounds.contains(value.round())
-                ? FlLine(color: gridColor, strokeWidth: 2.5)
-                : FlLine(color: gridColor, strokeWidth: 0.5),
-          ),
-          lineTouchData: const LineTouchData(enabled: false),
+          hInterval: hInterval,
+          dayBounds: dayBounds,
+          gridColor: gridColor,
+          pixelsPerHour: pph,
         ),
       ),
     );
   }
+}
+
+class _MultiLinePainter extends CustomPainter {
+  final List<HourlyPeriod> periods;
+  final List<ChartSeries> series;
+  final double minY;
+  final double maxY;
+  final double hInterval;
+  final Set<int> dayBounds;
+  final Color gridColor;
+  final double pixelsPerHour;
+
+  const _MultiLinePainter({
+    required this.periods,
+    required this.series,
+    required this.minY,
+    required this.maxY,
+    required this.hInterval,
+    required this.dayBounds,
+    required this.gridColor,
+    required this.pixelsPerHour,
+  });
+
+  double _toCanvasY(double value, double canvasHeight) =>
+      canvasHeight * (1.0 - (value - minY) / (maxY - minY));
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()..color = gridColor..strokeWidth = 0.5;
+
+    // Horizontal grid lines.
+    double y = minY;
+    while (y <= maxY + 1e-9) {
+      final cy = _toCanvasY(y, size.height);
+      canvas.drawLine(Offset(0, cy), Offset(size.width, cy), gridPaint);
+      y += hInterval;
+    }
+
+    // Vertical grid lines — zoom-aware.
+    final hourStep = chartHourStep(pixelsPerHour);
+    for (int i = 0; i < periods.length; i++) {
+      final hour = periods[i].startTime.toLocal().hour;
+      if (hour % hourStep != 0) continue;
+      final cx = i * pixelsPerHour;
+      final isDayBound = dayBounds.contains(i);
+      canvas.drawLine(
+        Offset(cx, 0),
+        Offset(cx, size.height),
+        Paint()
+          ..color = gridColor
+          ..strokeWidth = isDayBound ? 2.5 : 0.5,
+      );
+    }
+
+    // Draw each series as straight lines.
+    for (final s in series) {
+      final paint = Paint()
+        ..color = s.color
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      final path = Path();
+      for (int i = 0; i < periods.length; i++) {
+        final cx = i * pixelsPerHour;
+        final cy = _toCanvasY(s.valueSelector(periods[i]), size.height);
+        if (i == 0) {
+          path.moveTo(cx, cy);
+        } else {
+          path.lineTo(cx, cy);
+        }
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_MultiLinePainter old) =>
+      old.periods != periods ||
+      old.series != series ||
+      old.minY != minY ||
+      old.maxY != maxY ||
+      old.pixelsPerHour != pixelsPerHour;
 }

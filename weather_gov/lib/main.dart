@@ -8,6 +8,7 @@ import 'services/nws_service.dart';
 import 'services/nominatim_service.dart';
 import 'services/cache_service.dart';
 import 'services/usno_service.dart';
+import 'services/openuv_service.dart';
 import 'ui/chart_screen.dart';
 
 void main() async {
@@ -20,6 +21,7 @@ void main() async {
     nominatimService: NominatimService(client: client),
     cacheService: CacheService(prefs),
     usnoService: UsnoService(client: http.Client()),
+    epaUvService: OpenUvService(client: client),
     prefs: prefs,
   );
   await provider.init();

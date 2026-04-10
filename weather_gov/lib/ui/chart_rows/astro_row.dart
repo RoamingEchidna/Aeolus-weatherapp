@@ -1,31 +1,112 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../constants.dart';
 import '../../models/astro_day.dart';
 import '../../models/hourly_period.dart';
+import '../chart_scale.dart';
+
+String? _svgAssetForPhase(String? phase) {
+  switch (phase) {
+    case 'New Moon':         return 'assets/moon_phases/new_moon.svg';
+    case 'Waxing Crescent':  return 'assets/moon_phases/waxing_crescent.svg';
+    case 'First Quarter':    return 'assets/moon_phases/first_quarter.svg';
+    case 'Waxing Gibbous':   return 'assets/moon_phases/waxing_gibbous.svg';
+    case 'Full Moon':        return 'assets/moon_phases/full_moon.svg';
+    case 'Waning Gibbous':   return 'assets/moon_phases/waning_gibbous.svg';
+    case 'Last Quarter':     return 'assets/moon_phases/last_quarter.svg';
+    case 'Waning Crescent':  return 'assets/moon_phases/waning_crescent.svg';
+    default: return null;
+  }
+}
 
 class AstroRow extends StatelessWidget {
   final List<HourlyPeriod> periods;
   final List<AstroDay> astroDays;
   final double height;
+  final bool showSolar;
+  final bool showLunar;
 
   const AstroRow({
     super.key,
     required this.periods,
     required this.astroDays,
     this.height = 50.0,
+    this.showSolar = true,
+    this.showLunar = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final pph = ChartScale.of(context).pixelsPerHour;
+    final totalWidth = periods.length * pph;
+    final windowStart = periods.first.startTime.toLocal();
+
+    // When both bands are shown, each takes half the height.
+    // When only one is shown, it occupies the full height.
+    final both = showSolar && showLunar;
+    final moonBandTop    = both ? height / 2 : 0.0;
+    final moonBandHeight = both ? height / 2 : height;
+
+    double xFor(DateTime dt) {
+      final minutes = dt.difference(windowStart).inMinutes;
+      return (minutes / 60.0) * pph;
+    }
+
+    // Build moon phase icon overlays centered between moonrise and moonset.
+    final moonIcons = <Widget>[];
+    if (showLunar) {
+      for (final day in astroDays) {
+        if (day.isSentinel) continue;
+        final asset = _svgAssetForPhase(day.moonPhase);
+        if (asset == null) continue;
+        final rise = day.moonrise;
+        final set = day.moonset;
+        if (rise == null && set == null) continue;
+
+        // Center x: midpoint of visible moon-up segment, clamped to total width.
+        double centerX;
+        if (rise != null && set != null && set.isAfter(rise)) {
+          centerX = (xFor(rise) + xFor(set)) / 2;
+        } else if (rise != null) {
+          // Rises today, sets tomorrow — center in second half of day.
+          final dayEnd = DateTime(day.date.year, day.date.month, day.date.day + 1);
+          centerX = (xFor(rise) + xFor(dayEnd)) / 2;
+        } else {
+          // Sets today, rose yesterday — center in first half.
+          centerX = (0 + xFor(set!)) / 2;
+        }
+        centerX = centerX.clamp(0.0, totalWidth);
+
+        const iconSize = 18.0;
+        moonIcons.add(Positioned(
+          left: centerX - iconSize / 2,
+          top: moonBandTop + (moonBandHeight - iconSize) / 2,
+          width: iconSize,
+          height: iconSize,
+          child: SvgPicture.asset(asset),
+        ));
+      }
+    }
+
     return SizedBox(
-      width: periods.length * kPixelsPerHour,
+      width: totalWidth,
       height: height,
-      child: CustomPaint(
-        painter: _AstroPainter(
-          periods: periods,
-          astroDays: astroDays,
-          height: height,
-        ),
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          CustomPaint(
+            size: Size(totalWidth, height),
+            painter: _AstroPainter(
+              periods: periods,
+              astroDays: astroDays,
+              height: height,
+              pixelsPerHour: pph,
+              showSolar: showSolar,
+              showLunar: showLunar,
+            ),
+          ),
+          ...moonIcons,
+        ],
       ),
     );
   }
@@ -35,18 +116,24 @@ class _AstroPainter extends CustomPainter {
   final List<HourlyPeriod> periods;
   final List<AstroDay> astroDays;
   final double height;
+  final double pixelsPerHour;
+  final bool showSolar;
+  final bool showLunar;
 
   const _AstroPainter({
     required this.periods,
     required this.astroDays,
     required this.height,
+    required this.pixelsPerHour,
+    this.showSolar = true,
+    this.showLunar = true,
   });
 
   DateTime get _windowStart => periods.first.startTime.toLocal();
 
   double _xFor(DateTime dt) {
     final minutes = dt.difference(_windowStart).inMinutes;
-    return (minutes / 60.0) * kPixelsPerHour;
+    return (minutes / 60.0) * pixelsPerHour;
   }
 
   double _xClamped(DateTime dt, double totalWidth) =>
@@ -54,11 +141,13 @@ class _AstroPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final sunHeight = size.height / 2; // top 25dp
-    final moonTop   = sunHeight;       // bottom 25dp
+    final both = showSolar && showLunar;
+    final sunHeight = both ? size.height / 2 : (showSolar ? size.height : 0.0);
+    final moonTop   = both ? sunHeight : 0.0;
+    final moonHeight = both ? size.height / 2 : (showLunar ? size.height : 0.0);
     final totalWidth = size.width;
 
-    // Base fill: night color for both bands.
+    // Base fill: night color.
     canvas.drawRect(
       Rect.fromLTWH(0, 0, totalWidth, size.height),
       Paint()..color = kColorAstroNight,
@@ -71,27 +160,55 @@ class _AstroPainter extends CustomPainter {
       }
 
       // Sun band.
+      if (showSolar) {
       _fillSegment(canvas, day.beginCivilTwilight, day.sunrise,
           kColorAstroCivilTwilight, 0, sunHeight, totalWidth);
       _fillSegment(canvas, day.sunrise, day.sunset,
           kColorAstroDay, 0, sunHeight, totalWidth);
       _fillSegment(canvas, day.sunset, day.endCivilTwilight,
           kColorAstroCivilTwilight, 0, sunHeight, totalWidth);
+      }
 
       // Noon marker — 3px wide, full sun-band height.
-      if (day.solarNoon != null) {
+      if (showSolar && day.solarNoon != null) {
         final nx = _xFor(day.solarNoon!);
         if (nx >= 0 && nx <= totalWidth) {
           canvas.drawRect(
             Rect.fromLTWH(nx - 1.5, 0, 3, sunHeight),
             Paint()..color = kColorAstroNoon,
           );
+
+          // UV index label: "UV" left of marker, number right of marker.
+          if (day.uvIndex != null) {
+            const fontSize = 9.0;
+            const gap = 3.0;
+            final textStyle = TextStyle(
+              color: kColorAstroNoon,
+              fontSize: fontSize,
+              fontWeight: FontWeight.bold,
+            );
+
+            void drawLabel(String text, {required bool leftOfMarker}) {
+              final tp = TextPainter(
+                text: TextSpan(text: text, style: textStyle),
+                textDirection: TextDirection.ltr,
+              )..layout();
+              final dy = (sunHeight - tp.height) / 2;
+              final dx = leftOfMarker
+                  ? nx - 1.5 - gap - tp.width
+                  : nx + 1.5 + gap;
+              tp.paint(canvas, Offset(dx, dy));
+            }
+
+            drawLabel('UV', leftOfMarker: true);
+            drawLabel('${day.uvIndex}', leftOfMarker: false);
+          }
         }
       }
     }
 
     // Moon band.
-    _paintMoonBand(canvas, moonTop, sunHeight, totalWidth);
+    if (showLunar) _paintMoonBand(canvas, moonTop, moonHeight, totalWidth);
   }
 
   void _fillSegment(Canvas canvas, DateTime? start, DateTime? end,
@@ -210,5 +327,8 @@ class _AstroPainter extends CustomPainter {
   bool shouldRepaint(_AstroPainter old) =>
       old.periods != periods ||
       old.astroDays != astroDays ||
-      old.height != height;
+      old.height != height ||
+      old.pixelsPerHour != pixelsPerHour ||
+      old.showSolar != showSolar ||
+      old.showLunar != showLunar;
 }

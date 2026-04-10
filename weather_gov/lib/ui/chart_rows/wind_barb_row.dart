@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../constants.dart';
 import '../../models/hourly_period.dart';
+import '../chart_scale.dart';
 
 // Cardinal direction → degrees FROM which wind blows (met convention).
 const _dirDeg = <String, double>{
@@ -30,18 +31,21 @@ class WindBarbRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final brightness = Theme.of(context).brightness;
+    final pph = ChartScale.of(context).pixelsPerHour;
     return SizedBox(
-      width: periods.length * kPixelsPerHour,
+      width: periods.length * pph,
       height: height,
       child: CustomPaint(
         painter: _WindBarbPainter(
           periods: periods,
-          lineColor: kColorWind,
+          lineColor: adaptiveChartColor(kColorWind, brightness),
           barbColor: scheme.outline,
           gridColor: scheme.outline.withAlpha(70),
           minY: minY,
           maxY: maxY,
           hInterval: hInterval,
+          pixelsPerHour: pph,
         ),
       ),
     );
@@ -56,6 +60,7 @@ class _WindBarbPainter extends CustomPainter {
   final double minY;
   final double maxY;
   final double hInterval;
+  final double pixelsPerHour;
 
   const _WindBarbPainter({
     required this.periods,
@@ -65,6 +70,7 @@ class _WindBarbPainter extends CustomPainter {
     required this.minY,
     required this.maxY,
     required this.hInterval,
+    required this.pixelsPerHour,
   });
 
   double _yForSpeed(double speed, double height) {
@@ -85,15 +91,18 @@ class _WindBarbPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
     }
 
-    // Vertical lines every hour; day boundaries are thicker.
+    // Vertical lines — density scales with zoom.
+    final hourStep = chartHourStep(pixelsPerHour);
     for (int i = 0; i < periods.length; i++) {
-      final x = i * kPixelsPerHour;
-      final isDayBoundary = periods[i].startTime.toLocal().hour == 0;
+      final hour = periods[i].startTime.toLocal().hour;
+      if (hour % hourStep != 0) continue;
+      final x = i * pixelsPerHour;
+      final isDayBoundary = hour == 0;
       gridPaint.strokeWidth = isDayBoundary ? 2.5 : 0.5;
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
     }
 
-    // Smooth connecting line through barb centers (full color, cubic bezier).
+    // Straight connecting line through barb centers.
     final linePaint = Paint()
       ..color = lineColor
       ..strokeWidth = 2.5
@@ -101,16 +110,13 @@ class _WindBarbPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final pts = List.generate(periods.length, (i) => Offset(
-      i * kPixelsPerHour + kPixelsPerHour / 2,
+      i * pixelsPerHour,
       _yForSpeed(periods[i].windSpeedMph, size.height),
     ));
     if (pts.isNotEmpty) {
       final path = Path()..moveTo(pts[0].dx, pts[0].dy);
       for (int i = 1; i < pts.length; i++) {
-        final prev = pts[i - 1];
-        final curr = pts[i];
-        final cpx = (prev.dx + curr.dx) / 2;
-        path.cubicTo(cpx, prev.dy, cpx, curr.dy, curr.dx, curr.dy);
+        path.lineTo(pts[i].dx, pts[i].dy);
       }
       canvas.drawPath(path, linePaint);
     }
@@ -118,7 +124,7 @@ class _WindBarbPainter extends CustomPainter {
     // Draw each wind barb at the y position corresponding to wind speed.
     for (int i = 0; i < periods.length; i++) {
       final speed = periods[i].windSpeedMph;
-      final cx = i * kPixelsPerHour + kPixelsPerHour / 2;
+      final cx = i * pixelsPerHour;
       final cy = _yForSpeed(speed, size.height);
       _drawBarb(
         canvas,

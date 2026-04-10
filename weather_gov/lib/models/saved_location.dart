@@ -12,6 +12,7 @@ class SavedLocation {
   final DateTime cacheTimestamp;
   final List<AstroDay> cachedAstroData;
   final bool isPinned;
+  final String? postcode;
 
   const SavedLocation({
     required this.displayName,
@@ -23,6 +24,7 @@ class SavedLocation {
     required this.cacheTimestamp,
     this.cachedAstroData = const [],
     this.isPinned = false,
+    this.postcode,
   });
 
   SavedLocation copyWith({
@@ -35,6 +37,7 @@ class SavedLocation {
     DateTime? cacheTimestamp,
     List<AstroDay>? cachedAstroData,
     bool? isPinned,
+    String? postcode,
   }) {
     return SavedLocation(
       displayName: displayName ?? this.displayName,
@@ -46,6 +49,7 @@ class SavedLocation {
       cacheTimestamp: cacheTimestamp ?? this.cacheTimestamp,
       cachedAstroData: cachedAstroData ?? this.cachedAstroData,
       isPinned: isPinned ?? this.isPinned,
+      postcode: postcode ?? this.postcode,
     );
   }
 
@@ -68,6 +72,7 @@ class SavedLocation {
               .toList()
           : [],
       isPinned: json.containsKey('isPinned') && json['isPinned'] == true,
+      postcode: json['postcode'] as String?,
     );
   }
 
@@ -81,5 +86,6 @@ class SavedLocation {
         'cacheTimestamp': cacheTimestamp.toIso8601String(),
         'cachedAstroData': cachedAstroData.map((d) => d.toJson()).toList(),
         'isPinned': isPinned,
+        if (postcode != null) 'postcode': postcode,
       };
 }

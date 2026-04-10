@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../constants.dart';
 import '../../models/hourly_period.dart';
+import '../chart_scale.dart';
 
 class ConditionsRow extends StatelessWidget {
   final List<HourlyPeriod> periods;
@@ -9,20 +10,21 @@ class ConditionsRow extends StatelessWidget {
   const ConditionsRow(
       {super.key, required this.periods, this.height = kChartRowHeight});
 
-  Color _colorFor(String forecast) {
+  Color _colorFor(String forecast, Brightness brightness) {
     final f = forecast.toLowerCase();
-    if (f.contains('thunder')) return kColorWeatherThunder;
-    if (f.contains('freezing')) return kColorWeatherFreezingRain;
-    if (f.contains('sleet') || f.contains('ice pellet')) return kColorWeatherSleet;
-    if (f.contains('snow') || f.contains('blizzard')) return kColorWeatherSnow;
+    if (f.contains('thunder')) return adaptiveChartColor(kColorWeatherThunder, brightness);
+    if (f.contains('freezing')) return adaptiveChartColor(kColorWeatherFreezingRain, brightness);
+    if (f.contains('sleet') || f.contains('ice pellet')) return adaptiveChartColor(kColorWeatherSleet, brightness);
+    if (f.contains('snow') || f.contains('blizzard')) return adaptiveChartColor(kColorWeatherSnow, brightness);
     if (f.contains('rain') || f.contains('shower') || f.contains('drizzle')) {
-      return kColorWeatherRain;
+      return adaptiveChartColor(kColorWeatherRain, brightness);
     }
     return Colors.transparent;
   }
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     final borderColor = Theme.of(context).colorScheme.outline.withAlpha(120);
     final textStyle = Theme.of(context)
         .textTheme
@@ -40,17 +42,18 @@ class ConditionsRow extends StatelessWidget {
       }
     }
 
+    final pph = ChartScale.of(context).pixelsPerHour;
     return SizedBox(
-      width: periods.length * kPixelsPerHour,
+      width: periods.length * pph,
       height: height,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: groups
             .map((g) => _ConditionCell(
                   label: g.label,
-                  width: g.count * kPixelsPerHour,
+                  width: g.count * pph,
                   height: height,
-                  color: _colorFor(g.label),
+                  color: _colorFor(g.label, brightness),
                   borderColor: borderColor,
                   textStyle: textStyle,
                 ))

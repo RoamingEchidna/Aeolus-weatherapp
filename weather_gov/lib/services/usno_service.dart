@@ -61,6 +61,22 @@ class UsnoService {
       final sundata  = data['sundata']  as List<dynamic>? ?? [];
       final moondata = data['moondata'] as List<dynamic>? ?? [];
 
+      final curPhase = data['curphase'] as String?;
+      final closest = data['closestphase'] as Map<String, dynamic>?;
+      String? moonPhase = curPhase;
+      if (closest != null) {
+        final closestDateStr = closest['date'] as String?;
+        if (closestDateStr != null) {
+          final closestDate = DateTime.tryParse(closestDateStr);
+          if (closestDate != null &&
+              closestDate.year == date.year &&
+              closestDate.month == date.month &&
+              closestDate.day == date.day) {
+            moonPhase = closest['phase'] as String?;
+          }
+        }
+      }
+
       return AstroDay(
         date: date,
         beginCivilTwilight: parseEvent(sundata,  'Begin Civil Twilight'),
@@ -70,6 +86,7 @@ class UsnoService {
         endCivilTwilight:    parseEvent(sundata,  'End Civil Twilight'),
         moonrise:            parseEvent(moondata, 'Rise'),
         moonset:             parseEvent(moondata, 'Set'),
+        moonPhase:           moonPhase,
       );
     } catch (_) {
       return AstroDay.sentinel(date);

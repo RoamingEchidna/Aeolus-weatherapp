@@ -7,6 +7,8 @@ class AstroDay {
   final DateTime? endCivilTwilight;
   final DateTime? moonrise;
   final DateTime? moonset;
+  final int? uvIndex;
+  final String? moonPhase; // e.g. "Waxing Crescent", "Full Moon", etc.
 
   const AstroDay({
     required this.date,
@@ -17,7 +19,22 @@ class AstroDay {
     this.endCivilTwilight,
     this.moonrise,
     this.moonset,
+    this.uvIndex,
+    this.moonPhase,
   });
+
+  AstroDay copyWith({int? uvIndex, String? moonPhase}) => AstroDay(
+        date: date,
+        beginCivilTwilight: beginCivilTwilight,
+        sunrise: sunrise,
+        solarNoon: solarNoon,
+        sunset: sunset,
+        endCivilTwilight: endCivilTwilight,
+        moonrise: moonrise,
+        moonset: moonset,
+        uvIndex: uvIndex ?? this.uvIndex,
+        moonPhase: moonPhase ?? this.moonPhase,
+      );
 
   /// A sentinel value representing a failed API call for this date.
   /// All event fields are null; painter draws diagonal hatching.
@@ -41,6 +58,8 @@ class AstroDay {
         'endCivilTwilight': endCivilTwilight?.toIso8601String(),
         'moonrise': moonrise?.toIso8601String(),
         'moonset': moonset?.toIso8601String(),
+        if (uvIndex != null) 'uvIndex': uvIndex,
+        if (moonPhase != null) 'moonPhase': moonPhase,
       };
 
   factory AstroDay.fromStoredJson(Map<String, dynamic> json) {
@@ -58,6 +77,8 @@ class AstroDay {
       endCivilTwilight: parse('endCivilTwilight'),
       moonrise: parse('moonrise'),
       moonset: parse('moonset'),
+      uvIndex: json['uvIndex'] as int?,
+      moonPhase: json['moonPhase'] as String?,
     );
   }
 }

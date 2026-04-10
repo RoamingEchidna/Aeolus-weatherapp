@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../models/hourly_period.dart';
+import 'chart_scale.dart';
+
 
 class TimeAxis extends StatelessWidget {
   final List<HourlyPeriod> periods;
@@ -10,6 +12,8 @@ class TimeAxis extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final pph = ChartScale.of(context).pixelsPerHour;
+    final hourStep = chartHourStep(pph);
     return SizedBox(
       height: kTimeAxisHeight,
       child: Row(
@@ -21,18 +25,18 @@ class TimeAxis extends StatelessWidget {
           String label;
           if (isStartOfDay) {
             label = _dayLabel(p.startTime.toLocal());
-          } else if (hour % 6 == 0) {
+          } else if (hour % hourStep == 0) {
             label = _hourLabel(hour);
           } else {
             label = '';
           }
           return SizedBox(
-            width: kPixelsPerHour,
+            width: pph,
             child: label.isEmpty
                 ? const SizedBox.shrink()
                 : Text(label,
                     style: textTheme.labelSmall,
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.left,
                     overflow: TextOverflow.visible,
                     softWrap: false),
           );
