@@ -28,7 +28,8 @@ class MultiLineChartRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gridColor = Theme.of(context).colorScheme.outline.withAlpha(70);
-    final pph = ChartScale.of(context).pixelsPerHour;
+    final scale = ChartScale.of(context);
+    final pph = scale.pixelsPerHour;
 
     // Compute bounds from all series when not provided.
     double lo = minY ?? double.infinity;
@@ -56,7 +57,7 @@ class MultiLineChartRow extends StatelessWidget {
 
     final dayBounds = <int>{};
     for (int i = 0; i < periods.length; i++) {
-      if (periods[i].startTime.toLocal().hour == 0) dayBounds.add(i);
+      if (scale.toLocationTime(periods[i].startTime).hour == 0) dayBounds.add(i);
     }
 
     return SizedBox(
@@ -72,6 +73,7 @@ class MultiLineChartRow extends StatelessWidget {
           dayBounds: dayBounds,
           gridColor: gridColor,
           pixelsPerHour: pph,
+          tzOffsetHours: scale.tzOffsetHours,
         ),
       ),
     );
@@ -87,6 +89,7 @@ class _MultiLinePainter extends CustomPainter {
   final Set<int> dayBounds;
   final Color gridColor;
   final double pixelsPerHour;
+  final int tzOffsetHours;
 
   const _MultiLinePainter({
     required this.periods,
@@ -97,6 +100,7 @@ class _MultiLinePainter extends CustomPainter {
     required this.dayBounds,
     required this.gridColor,
     required this.pixelsPerHour,
+    this.tzOffsetHours = 0,
   });
 
   double _toCanvasY(double value, double canvasHeight) =>
@@ -117,7 +121,7 @@ class _MultiLinePainter extends CustomPainter {
     // Vertical grid lines — zoom-aware.
     final hourStep = chartHourStep(pixelsPerHour);
     for (int i = 0; i < periods.length; i++) {
-      final hour = periods[i].startTime.toLocal().hour;
+      final hour = periods[i].startTime.toUtc().add(Duration(hours: tzOffsetHours)).hour;
       if (hour % hourStep != 0) continue;
       final cx = i * pixelsPerHour;
       final isDayBound = dayBounds.contains(i);

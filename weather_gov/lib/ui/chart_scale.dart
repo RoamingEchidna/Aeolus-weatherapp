@@ -1,26 +1,32 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 
-/// Provides the current pixels-per-hour scale to all chart widgets in the tree.
-/// Use [ChartScale.of(context).pixelsPerHour] instead of the [kPixelsPerHour] constant
-/// wherever the value needs to respond to pinch-zoom.
+/// Provides the current pixels-per-hour scale and location timezone offset
+/// to all chart widgets in the tree.
 class ChartScale extends InheritedWidget {
   final double pixelsPerHour;
+  /// UTC offset in whole hours for the displayed location (e.g. -7 for PDT).
+  final int tzOffsetHours;
 
   const ChartScale({
     super.key,
     required this.pixelsPerHour,
+    this.tzOffsetHours = 0,
     required super.child,
   });
 
   static ChartScale of(BuildContext context) {
     final result = context.dependOnInheritedWidgetOfExactType<ChartScale>();
-    // Fall back to the default constant if no ancestor is present.
     return result ?? const ChartScale(pixelsPerHour: kPixelsPerHour, child: SizedBox.shrink());
   }
 
+  /// Converts a UTC DateTime to the location's local time.
+  DateTime toLocationTime(DateTime utc) =>
+      utc.toUtc().add(Duration(hours: tzOffsetHours));
+
   @override
-  bool updateShouldNotify(ChartScale old) => pixelsPerHour != old.pixelsPerHour;
+  bool updateShouldNotify(ChartScale old) =>
+      pixelsPerHour != old.pixelsPerHour || tzOffsetHours != old.tzOffsetHours;
 }
 
 /// Returns how many hours apart vertical grid lines should be drawn,

@@ -31,7 +31,8 @@ class MonotoneCubicChartRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gridColor = Theme.of(context).colorScheme.outline.withAlpha(70);
-    final pph = ChartScale.of(context).pixelsPerHour;
+    final scale = ChartScale.of(context);
+    final pph = scale.pixelsPerHour;
 
     final range = maxY - minY;
     final hInterval = range > 80
@@ -44,7 +45,7 @@ class MonotoneCubicChartRow extends StatelessWidget {
 
     final dayBounds = <int>{};
     for (int i = 0; i < periods.length; i++) {
-      if (periods[i].startTime.toLocal().hour == 0) dayBounds.add(i);
+      if (scale.toLocationTime(periods[i].startTime).hour == 0) dayBounds.add(i);
     }
 
     return SizedBox(
@@ -61,6 +62,7 @@ class MonotoneCubicChartRow extends StatelessWidget {
           gridColor: gridColor,
           showGrid: showGrid,
           pixelsPerHour: pph,
+          tzOffsetHours: scale.tzOffsetHours,
         ),
       ),
     );
@@ -77,6 +79,7 @@ class _MonotoneCubicPainter extends CustomPainter {
   final Color gridColor;
   final bool showGrid;
   final double pixelsPerHour;
+  final int tzOffsetHours;
 
   const _MonotoneCubicPainter({
     required this.periods,
@@ -88,6 +91,7 @@ class _MonotoneCubicPainter extends CustomPainter {
     required this.gridColor,
     required this.showGrid,
     required this.pixelsPerHour,
+    this.tzOffsetHours = 0,
   });
 
   double _toCanvasY(double value, double canvasHeight) {
@@ -118,7 +122,7 @@ class _MonotoneCubicPainter extends CustomPainter {
 
     final hourStep = chartHourStep(pixelsPerHour);
     for (int i = 0; i < periods.length; i++) {
-      final hour = periods[i].startTime.toLocal().hour;
+      final hour = periods[i].startTime.toUtc().add(Duration(hours: tzOffsetHours)).hour;
       if (hour % hourStep != 0) continue;
       final cx = _toCanvasX(i);
       final isDayBound = dayBounds.contains(i);

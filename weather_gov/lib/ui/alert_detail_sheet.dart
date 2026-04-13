@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/weather_alert.dart';
+import '../providers/forecast_provider.dart';
 
 class AlertDetailSheet extends StatelessWidget {
   final List<WeatherAlert> alerts;
@@ -17,7 +19,8 @@ class AlertDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = DateFormat('EEE, MMM d h:mm a');
+    final use24Hour = context.watch<ForecastProvider>().use24Hour;
+    final fmt = DateFormat(use24Hour ? 'EEE, MMM d HH:mm' : 'EEE, MMM d h:mm a');
     return DraggableScrollableSheet(
       initialChildSize: 0.6,
       maxChildSize: 0.95,

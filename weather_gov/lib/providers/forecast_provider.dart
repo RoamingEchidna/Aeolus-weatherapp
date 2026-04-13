@@ -4,10 +4,12 @@ import '../constants.dart';
 import '../models/hourly_period.dart';
 import '../models/saved_location.dart';
 import '../services/nominatim_service.dart';
+export '../services/nominatim_service.dart' show SuggestionResult, NominatimService;
 import '../services/nws_service.dart';
 import '../services/cache_service.dart';
 import '../services/usno_service.dart';
 import '../services/openuv_service.dart';
+import '../services/fake_forecast.dart';
 
 class ForecastProvider extends ChangeNotifier {
   final NwsService _nwsService;
@@ -20,7 +22,10 @@ class ForecastProvider extends ChangeNotifier {
   SavedLocation? currentLocation;
   List<SavedLocation> savedLocations = [];
   Map<String, bool> visibleRows = Map.from(kDefaultRowVisibility);
+  List<String> rowOrder = List.from(kAllRows);
   bool isDarkMode = false;
+  bool use24Hour = false;
+  bool useMetric = false;
   bool syncPinnedOnOpen = false;
   bool isLoading = false;
   String? errorMessage;
@@ -60,7 +65,9 @@ class ForecastProvider extends ChangeNotifier {
   Future<void> _syncPinned() async {
     final now = DateTime.now();
     final stale = savedLocations
-        .where((l) => l.isPinned && now.difference(l.cacheTimestamp).inMinutes >= 60)
+        .where((l) => l.isPinned &&
+            l.displayName != 'Narnia' &&
+            now.difference(l.cacheTimestamp).inMinutes >= 60)
         .toList();
     if (stale.isEmpty) return;
     // Current location first (if in the stale list), then the rest.
@@ -80,26 +87,83 @@ class ForecastProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? get openUvApiKey => _prefs?.getString('openUvApiKey');
+
+  Future<void> setOpenUvApiKey(String key) async {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) {
+      await _prefs?.remove('openUvApiKey');
+      _openUvService.setApiKey(null);
+    } else {
+      await _prefs?.setString('openUvApiKey', trimmed);
+      _openUvService.setApiKey(trimmed);
+    }
+    notifyListeners();
+  }
+
+  void reorderRow(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex--;
+    final row = rowOrder.removeAt(oldIndex);
+    rowOrder.insert(newIndex, row);
+    _prefs?.setStringList('rowOrder', rowOrder);
+    notifyListeners();
+  }
+
   void _loadPreferences() {
     if (_prefs == null) return;
     isDarkMode = _prefs.getBool('isDarkMode') ?? false;
+    use24Hour = _prefs.getBool('use24Hour') ?? false;
+    useMetric = _prefs.getBool('useMetric') ?? false;
     syncPinnedOnOpen = _prefs.getBool('syncPinnedOnOpen') ?? false;
     for (final row in kAllRows) {
       final saved = _prefs.getBool('row_$row');
       if (saved != null) visibleRows[row] = saved;
+    }
+    final savedKey = _prefs.getString('openUvApiKey');
+    if (savedKey != null) _openUvService.setApiKey(savedKey);
+    final savedOrder = _prefs.getStringList('rowOrder');
+    if (savedOrder != null) {
+      // Merge: keep saved order, append any new rows not yet in saved order.
+      final merged = [...savedOrder.where(kAllRows.contains),
+                      ...kAllRows.where((r) => !savedOrder.contains(r))];
+      rowOrder = merged;
     }
   }
 
   void _savePreferences() {
     if (_prefs == null) return;
     _prefs.setBool('isDarkMode', isDarkMode);
+    _prefs.setBool('use24Hour', use24Hour);
+    _prefs.setBool('useMetric', useMetric);
     _prefs.setBool('syncPinnedOnOpen', syncPinnedOnOpen);
     for (final entry in visibleRows.entries) {
       _prefs.setBool('row_${entry.key}', entry.value);
     }
   }
 
+  Future<List<SuggestionResult>> getSuggestions(String query) =>
+      _nominatimService.suggest(query);
+
+  Future<void> selectSuggestion(SuggestionResult s) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await _fetchAndSave(s.displayName, s.lat, s.lon);
+    } catch (e) {
+      errorMessage = 'Error: $e';
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> searchLocation(String query) async {
+    if (query.trim().toLowerCase() == 'narnia') {
+      loadTestLocation();
+      return;
+    }
+
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -121,6 +185,10 @@ class ForecastProvider extends ChangeNotifier {
 
   Future<void> refreshCurrentLocation() async {
     if (currentLocation == null) return;
+    if (currentLocation!.displayName == 'Narnia') {
+      loadTestLocation();
+      return;
+    }
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -158,7 +226,7 @@ class ForecastProvider extends ChangeNotifier {
 
     // Build existing UV map from cached astro data.
     final cachedLocation = savedLocations
-        .where((l) => l.displayName == result.locationName)
+        .where((l) => l.displayName == displayName)
         .firstOrNull;
     final existingUv = <String, int>{};
     if (cachedLocation != null) {
@@ -200,7 +268,7 @@ class ForecastProvider extends ChangeNotifier {
     final mergedPeriods = [...yesterdayPeriods, ...result.periods];
 
     final location = SavedLocation(
-      displayName: result.locationName,
+      displayName: displayName,
       lat: lat,
       lon: lon,
       lastAccessed: now,
@@ -210,12 +278,23 @@ class ForecastProvider extends ChangeNotifier {
       cachedAstroData: astroDays,
       isPinned: cachedLocation?.isPinned ?? false,
       postcode: postcode ?? cachedLocation?.postcode,
+      tzOffsetHours: result.tzOffsetHours,
+      timeZone: result.timeZone,
     );
 
     savedLocations = _cacheService.addOrUpdate(savedLocations, location);
     _sortLocations();
     _cacheService.saveAll(savedLocations);
     currentLocation = location;
+  }
+
+  void loadTestLocation() {
+    final loc = buildFakeSavedLocation();
+    savedLocations = _cacheService.addOrUpdate(savedLocations, loc);
+    _sortLocations();
+    _cacheService.saveAll(savedLocations);
+    currentLocation = loc;
+    notifyListeners();
   }
 
   void selectLocation(SavedLocation location) {
@@ -255,6 +334,18 @@ class ForecastProvider extends ChangeNotifier {
 
   void toggleDarkMode() {
     isDarkMode = !isDarkMode;
+    _savePreferences();
+    notifyListeners();
+  }
+
+  void toggle24Hour() {
+    use24Hour = !use24Hour;
+    _savePreferences();
+    notifyListeners();
+  }
+
+  void toggleMetric() {
+    useMetric = !useMetric;
     _savePreferences();
     notifyListeners();
   }

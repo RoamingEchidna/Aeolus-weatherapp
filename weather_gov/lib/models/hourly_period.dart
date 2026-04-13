@@ -11,6 +11,15 @@ class HourlyPeriod {
   final String shortForecast;
   final String iconUrl;
 
+  // Gridpoint-derived fields (null if gridpoint fetch failed).
+  final int? thunderPct;
+  /// Rain accumulation in inches for this hour.
+  final double? rainInches;
+  /// Snow accumulation in inches for this hour.
+  final double? snowInches;
+  /// Weather types from NWS mapped to their coverage string (e.g. 'rain_showers' → 'chance').
+  final Map<String, String>? weatherTypes;
+
   const HourlyPeriod({
     required this.startTime,
     required this.temperature,
@@ -21,7 +30,34 @@ class HourlyPeriod {
     required this.windDirection,
     required this.shortForecast,
     required this.iconUrl,
+    this.thunderPct,
+    this.rainInches,
+    this.snowInches,
+    this.weatherTypes,
   });
+
+  HourlyPeriod copyWithGrid({
+    int? thunderPct,
+    double? rainInchesPerHr,
+    double? snowInchesPerHr,
+    Map<String, String>? weatherTypes,
+  }) {
+    return HourlyPeriod(
+      startTime: startTime,
+      temperature: temperature,
+      precipChance: precipChance,
+      relativeHumidity: relativeHumidity,
+      dewpointF: dewpointF,
+      windSpeedMph: windSpeedMph,
+      windDirection: windDirection,
+      shortForecast: shortForecast,
+      iconUrl: iconUrl,
+      thunderPct: thunderPct,
+      rainInches: rainInchesPerHr,
+      snowInches: snowInchesPerHr,
+      weatherTypes: weatherTypes,
+    );
+  }
 
   // Wind chill formula (NWS). Only valid when T <= 50°F and V > 3 mph.
   double get windChillF {
@@ -118,6 +154,12 @@ class HourlyPeriod {
       windDirection: json['windDirection'] as String,
       shortForecast: json['shortForecast'] as String,
       iconUrl: json['iconUrl'] as String,
+      thunderPct: (json['thunderPct'] as num?)?.toInt(),
+      rainInches: (json['rainInches'] as num?)?.toDouble(),
+      snowInches: (json['snowInches'] as num?)?.toDouble(),
+      weatherTypes: json['weatherTypes'] is Map
+          ? Map<String, String>.from(json['weatherTypes'] as Map)
+          : null, // ignore old List-format cache entries
     );
   }
 
@@ -131,5 +173,9 @@ class HourlyPeriod {
         'windDirection': windDirection,
         'shortForecast': shortForecast,
         'iconUrl': iconUrl,
+        if (thunderPct != null) 'thunderPct': thunderPct,
+        if (rainInches != null) 'rainInches': rainInches,
+        if (snowInches != null) 'snowInches': snowInches,
+        if (weatherTypes != null) 'weatherTypes': weatherTypes,
       };
 }

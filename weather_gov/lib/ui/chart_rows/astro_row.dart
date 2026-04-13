@@ -37,9 +37,11 @@ class AstroRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pph = ChartScale.of(context).pixelsPerHour;
+    final scale = ChartScale.of(context);
+    final pph = scale.pixelsPerHour;
     final totalWidth = periods.length * pph;
-    final windowStart = periods.first.startTime.toLocal();
+    final windowStart = scale.toLocationTime(periods.first.startTime);
+    final frameColor = Theme.of(context).colorScheme.outline.withAlpha(120);
 
     // When both bands are shown, each takes half the height.
     // When only one is shown, it occupies the full height.
@@ -101,8 +103,10 @@ class AstroRow extends StatelessWidget {
               astroDays: astroDays,
               height: height,
               pixelsPerHour: pph,
+              tzOffsetHours: scale.tzOffsetHours,
               showSolar: showSolar,
               showLunar: showLunar,
+              frameColor: frameColor,
             ),
           ),
           ...moonIcons,
@@ -119,17 +123,24 @@ class _AstroPainter extends CustomPainter {
   final double pixelsPerHour;
   final bool showSolar;
   final bool showLunar;
+  final int tzOffsetHours;
+  final Color frameColor;
 
   const _AstroPainter({
     required this.periods,
     required this.astroDays,
     required this.height,
     required this.pixelsPerHour,
+    required this.frameColor,
     this.showSolar = true,
     this.showLunar = true,
+    this.tzOffsetHours = 0,
   });
 
-  DateTime get _windowStart => periods.first.startTime.toLocal();
+  DateTime _toLocationTime(DateTime dt) =>
+      dt.toUtc().add(Duration(hours: tzOffsetHours));
+
+  DateTime get _windowStart => _toLocationTime(periods.first.startTime);
 
   double _xFor(DateTime dt) {
     final minutes = dt.difference(_windowStart).inMinutes;
@@ -209,6 +220,14 @@ class _AstroPainter extends CustomPainter {
 
     // Moon band.
     if (showLunar) _paintMoonBand(canvas, moonTop, moonHeight, totalWidth);
+
+    // Top and bottom frame lines.
+    final framePaint = Paint()
+      ..color = frameColor
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(0, 0), Offset(totalWidth, 0), framePaint);
+    canvas.drawLine(Offset(0, size.height), Offset(totalWidth, size.height), framePaint);
   }
 
   void _fillSegment(Canvas canvas, DateTime? start, DateTime? end,
@@ -330,5 +349,6 @@ class _AstroPainter extends CustomPainter {
       old.height != height ||
       old.pixelsPerHour != pixelsPerHour ||
       old.showSolar != showSolar ||
-      old.showLunar != showLunar;
+      old.showLunar != showLunar ||
+      old.tzOffsetHours != tzOffsetHours;
 }

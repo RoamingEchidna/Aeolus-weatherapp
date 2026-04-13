@@ -18,6 +18,7 @@ class WindBarbRow extends StatelessWidget {
   final double minY;
   final double maxY;
   final double hInterval;
+  final bool useMetric;
 
   const WindBarbRow({
     super.key,
@@ -26,13 +27,15 @@ class WindBarbRow extends StatelessWidget {
     required this.maxY,
     required this.hInterval,
     this.height = kChartRowHeight,
+    this.useMetric = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final brightness = Theme.of(context).brightness;
-    final pph = ChartScale.of(context).pixelsPerHour;
+    final scale = ChartScale.of(context);
+    final pph = scale.pixelsPerHour;
     return SizedBox(
       width: periods.length * pph,
       height: height,
@@ -46,6 +49,8 @@ class WindBarbRow extends StatelessWidget {
           maxY: maxY,
           hInterval: hInterval,
           pixelsPerHour: pph,
+          tzOffsetHours: scale.tzOffsetHours,
+          useMetric: useMetric,
         ),
       ),
     );
@@ -61,6 +66,8 @@ class _WindBarbPainter extends CustomPainter {
   final double maxY;
   final double hInterval;
   final double pixelsPerHour;
+  final int tzOffsetHours;
+  final bool useMetric;
 
   const _WindBarbPainter({
     required this.periods,
@@ -71,6 +78,8 @@ class _WindBarbPainter extends CustomPainter {
     required this.maxY,
     required this.hInterval,
     required this.pixelsPerHour,
+    this.tzOffsetHours = 0,
+    this.useMetric = false,
   });
 
   double _yForSpeed(double speed, double height) {
@@ -94,7 +103,7 @@ class _WindBarbPainter extends CustomPainter {
     // Vertical lines — density scales with zoom.
     final hourStep = chartHourStep(pixelsPerHour);
     for (int i = 0; i < periods.length; i++) {
-      final hour = periods[i].startTime.toLocal().hour;
+      final hour = periods[i].startTime.toUtc().add(Duration(hours: tzOffsetHours)).hour;
       if (hour % hourStep != 0) continue;
       final x = i * pixelsPerHour;
       final isDayBoundary = hour == 0;
@@ -109,9 +118,11 @@ class _WindBarbPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
+    double displaySpeed(double mph) => useMetric ? mph * 1.60934 : mph;
+
     final pts = List.generate(periods.length, (i) => Offset(
       i * pixelsPerHour,
-      _yForSpeed(periods[i].windSpeedMph, size.height),
+      _yForSpeed(displaySpeed(periods[i].windSpeedMph), size.height),
     ));
     if (pts.isNotEmpty) {
       final path = Path()..moveTo(pts[0].dx, pts[0].dy);
@@ -122,14 +133,15 @@ class _WindBarbPainter extends CustomPainter {
     }
 
     // Draw each wind barb at the y position corresponding to wind speed.
+    // Barb symbols always use mph→knots regardless of display units.
     for (int i = 0; i < periods.length; i++) {
-      final speed = periods[i].windSpeedMph;
+      final mph = periods[i].windSpeedMph;
       final cx = i * pixelsPerHour;
-      final cy = _yForSpeed(speed, size.height);
+      final cy = _yForSpeed(displaySpeed(mph), size.height);
       _drawBarb(
         canvas,
         Offset(cx, cy),
-        speed,
+        mph,
         _dirDeg[periods[i].windDirection] ?? 0,
       );
     }

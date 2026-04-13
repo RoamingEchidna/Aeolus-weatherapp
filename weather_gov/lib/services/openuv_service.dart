@@ -4,13 +4,17 @@ import '../secrets.dart';
 
 class OpenUvService {
   final http.Client _client;
+  String? _overrideKey; // set at runtime from SharedPreferences
   static const _base = 'https://api.openuv.io/api/v1/uv';
-  static const _headers = {
-    'x-access-token': kOpenUvApiKey,
-    'Accept': 'application/json',
-  };
 
   OpenUvService({http.Client? client}) : _client = client ?? http.Client();
+
+  void setApiKey(String? key) => _overrideKey = (key != null && key.trim().isNotEmpty) ? key.trim() : null;
+
+  Map<String, String> get _headers => {
+    'x-access-token': _overrideKey ?? kOpenUvApiKey,
+    'Accept': 'application/json',
+  };
 
   /// Fetches uv_max for a single date at the given lat/lon.
   /// [date] is local midnight for the desired day.

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 // Layout
 const double kPixelsPerHour = 24.0;
 const double kChartRowHeight = 100.0;
+const double kMinChartRowHeight = 120.0;
 const double kTimeAxisHeight = 32.0;
 const double kLabelColumnWidth = 56.0;
 const int kMaxSavedLocations = 10;
@@ -61,27 +62,30 @@ Color adaptiveChartColor(Color base, Brightness brightness) {
 }
 
 // Row group names
-const String kRowTempGroup   = 'Temp & Dew';
+const String kRowTempGroup   = 'Temperature';
 const String kRowWindGroup   = 'Wind';
-const String kRowAtmosGroup  = 'RH / Precip';
+const String kRowAtmosGroup  = 'Precipitation';
 const String kRowConditions  = 'Conditions';
+const String kRowPrecipDetail = 'Precip Detail';
 const String kRowSolar       = 'Solar';
 const String kRowLunar       = 'Lunar';
 
 const List<String> kAllRows = [
   kRowTempGroup,
-  kRowWindGroup,
   kRowAtmosGroup,
+  kRowWindGroup,
+  kRowPrecipDetail,
   kRowConditions,
   kRowSolar,
   kRowLunar,
 ];
 
 const Map<String, bool> kDefaultRowVisibility = {
-  kRowTempGroup:  true,
-  kRowWindGroup:  true,
-  kRowAtmosGroup: true,
-  kRowConditions: true,
-  kRowSolar:      false,
-  kRowLunar:      false,
+  kRowTempGroup:   true,
+  kRowWindGroup:   true,
+  kRowAtmosGroup:  true,
+  kRowConditions:  true,
+  kRowPrecipDetail: false,
+  kRowSolar:       false,
+  kRowLunar:       false,
 };
