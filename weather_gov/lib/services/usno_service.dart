@@ -17,8 +17,8 @@ class UsnoService {
   }) async {
     // Collect all calendar dates in the window.
     final dates = <DateTime>[];
-    var d = DateTime(windowStart.year, windowStart.month, windowStart.day);
-    final lastDay = DateTime(windowEnd.year, windowEnd.month, windowEnd.day);
+    var d = DateTime.utc(windowStart.year, windowStart.month, windowStart.day);
+    final lastDay = DateTime.utc(windowEnd.year, windowEnd.month, windowEnd.day);
     while (!d.isAfter(lastDay)) {
       dates.add(d);
       d = d.add(const Duration(days: 1));
@@ -49,7 +49,7 @@ class UsnoService {
           final entry = e as Map<String, dynamic>;
           if (entry['phen'] == phen) {
             final parts = (entry['time'] as String).split(':');
-            return DateTime(
+            return DateTime.utc(
               date.year, date.month, date.day,
               int.parse(parts[0]), int.parse(parts[1]),
             );

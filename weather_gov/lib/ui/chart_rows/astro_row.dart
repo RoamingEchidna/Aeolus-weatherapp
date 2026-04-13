@@ -71,7 +71,7 @@ class AstroRow extends StatelessWidget {
           centerX = (xFor(rise) + xFor(set)) / 2;
         } else if (rise != null) {
           // Rises today, sets tomorrow — center in second half of day.
-          final dayEnd = DateTime(day.date.year, day.date.month, day.date.day + 1);
+          final dayEnd = DateTime.utc(day.date.year, day.date.month, day.date.day + 1);
           centerX = (xFor(rise) + xFor(dayEnd)) / 2;
         } else {
           // Sets today, rose yesterday — center in first half.
@@ -276,7 +276,7 @@ class _AstroPainter extends CustomPainter {
             final prevRise = astroDays[i - 1].moonrise;
             if (prevRise != null) {
               final dayEndX = _xClamped(
-                DateTime(day.date.year, day.date.month, day.date.day, 23, 59, 59),
+                DateTime.utc(day.date.year, day.date.month, day.date.day, 23, 59, 59),
                 totalWidth,
               );
               final px0 = _xClamped(prevRise, totalWidth);
@@ -289,7 +289,7 @@ class _AstroPainter extends CustomPainter {
         }
       } else if (rise != null) {
         // Moon rises today, sets tomorrow — paint rise to end of day.
-        final dayEnd = DateTime(day.date.year, day.date.month, day.date.day + 1);
+        final dayEnd = DateTime.utc(day.date.year, day.date.month, day.date.day + 1);
         final x0 = _xClamped(rise, totalWidth);
         final x1 = _xClamped(dayEnd, totalWidth);
         if (x1 > x0) {
@@ -310,7 +310,7 @@ class _AstroPainter extends CustomPainter {
       Canvas canvas, AstroDay day, double totalWidth, double fullHeight) {
     final x0 = _xClamped(day.date, totalWidth);
     final x1 = _xClamped(
-      DateTime(day.date.year, day.date.month, day.date.day + 1),
+      DateTime.utc(day.date.year, day.date.month, day.date.day + 1),
       totalWidth,
     );
     if (x1 <= x0) return;

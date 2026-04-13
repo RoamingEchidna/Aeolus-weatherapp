@@ -18,36 +18,45 @@ class TimeAxis extends StatelessWidget {
     final hourStep = chartHourStep(pph);
     return ClipRect(
       child: SizedBox(
-      height: kTimeAxisHeight,
-      child: Row(
-        children: [
-          ...periods.asMap().entries.map((entry) {
-            final i = entry.key;
-            final p = entry.value;
-            final localTime = scale.toLocationTime(p.startTime);
-            final hour = localTime.hour;
-            final isStartOfDay = hour == 0 || i == 0;
-            String label;
-            if (isStartOfDay) {
-              label = _dayLabel(localTime);
-            } else if (hour % hourStep == 0) {
-              label = _hourLabel(hour, use24Hour);
-            } else {
-              label = '';
-            }
-            return SizedBox(
-              width: pph,
-              child: label.isEmpty
-                  ? const SizedBox.shrink()
-                  : Text(label,
-                      style: textTheme.labelSmall,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.visible,
-                      softWrap: false),
-            );
-          }),
-        ],
-      ),
+        height: kTimeAxisHeight,
+        child: OverflowBox(
+          maxWidth: double.infinity,
+          alignment: Alignment.centerLeft,
+          child: Transform.translate(
+            offset: Offset(-pph / 2, 0),
+            child: Row(
+              children: [
+                ...periods.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final p = entry.value;
+                  final localTime = scale.toLocationTime(p.startTime);
+                  final hour = localTime.hour;
+                  final isStartOfDay = hour == 0 || i == 0;
+                  String label;
+                  if (isStartOfDay) {
+                    label = _dayLabel(localTime);
+                  } else if (hour % hourStep == 0) {
+                    label = _hourLabel(hour, use24Hour);
+                  } else {
+                    label = '';
+                  }
+                  return SizedBox(
+                    width: pph,
+                    child: label.isEmpty
+                        ? const SizedBox.shrink()
+                        : Text(label,
+                            style: textTheme.labelSmall,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.visible,
+                            softWrap: false),
+                  );
+                }),
+                // Trailing half-cell so the last label isn't clipped by ClipRect.
+                SizedBox(width: pph / 2),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
