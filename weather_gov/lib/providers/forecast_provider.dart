@@ -10,6 +10,7 @@ import '../services/cache_service.dart';
 import '../services/usno_service.dart';
 import '../services/openuv_service.dart';
 import '../services/fake_forecast.dart';
+import '../services/background_sync_service.dart';
 
 class ForecastProvider extends ChangeNotifier {
   final NwsService _nwsService;
@@ -52,7 +53,7 @@ class ForecastProvider extends ChangeNotifier {
     }
     _loadPreferences();
     notifyListeners();
-    if (syncPinnedOnOpen) _syncPinned();
+    if (syncPinnedOnOpen) BackgroundSyncService.schedule();
   }
 
   void _sortLocations() {
@@ -60,31 +61,6 @@ class ForecastProvider extends ChangeNotifier {
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
       return b.lastAccessed.compareTo(a.lastAccessed);
     });
-  }
-
-  Future<void> _syncPinned() async {
-    final now = DateTime.now();
-    final stale = savedLocations
-        .where((l) => l.isPinned &&
-            l.displayName != 'Narnia' &&
-            now.difference(l.cacheTimestamp).inMinutes >= 60)
-        .toList();
-    if (stale.isEmpty) return;
-    // Current location first (if in the stale list), then the rest.
-    final current = currentLocation;
-    final ordered = [
-      if (current != null && stale.any((l) => l.displayName == current.displayName)) current,
-      ...stale.where((l) => l.displayName != current?.displayName),
-    ];
-    isLoading = true;
-    notifyListeners();
-    for (final loc in ordered) {
-      try {
-        await _fetchAndSave(loc.displayName, loc.lat, loc.lon, postcode: loc.postcode);
-      } catch (_) {}
-    }
-    isLoading = false;
-    notifyListeners();
   }
 
   String? get openUvApiKey => _prefs?.getString('openUvApiKey');
@@ -353,6 +329,11 @@ class ForecastProvider extends ChangeNotifier {
   void toggleSyncPinnedOnOpen() {
     syncPinnedOnOpen = !syncPinnedOnOpen;
     _savePreferences();
+    if (syncPinnedOnOpen) {
+      BackgroundSyncService.schedule();
+    } else {
+      BackgroundSyncService.cancel();
+    }
     notifyListeners();
   }
 }
