@@ -6,6 +6,7 @@ import 'services/background_sync_service.dart';
 import 'services/cache_service.dart';
 import 'services/nws_service.dart';
 import 'services/usno_service.dart';
+import 'services/notification_service.dart';
 import 'services/openuv_service.dart';
 import 'models/saved_location.dart';
 
@@ -14,6 +15,7 @@ import 'models/saved_location.dart';
 void backgroundWorkerCallback() {
   Workmanager().executeTask((taskName, inputData) async {
     WidgetsFlutterBinding.ensureInitialized();
+    await NotificationService.initialize();
 
     // Always reschedule next midnight first, before any work.
     await BackgroundSyncService.schedule();
@@ -23,6 +25,8 @@ void backgroundWorkerCallback() {
     // If the user turned the toggle off since this was scheduled, stop here.
     final enabled = prefs.getBool('syncPinnedOnOpen') ?? false;
     if (!enabled) return Future.value(true);
+
+    final notificationsEnabled = prefs.getBool('severeWeatherNotifications') ?? false;
 
     final cacheService = CacheService(prefs);
     final locations = cacheService.loadAll()
@@ -51,6 +55,17 @@ void backgroundWorkerCallback() {
           usnoService: usnoService,
           openUvService: openUvService,
         );
+        if (notificationsEnabled) {
+          final fresh = cacheService.loadAll();
+          final updated = fresh.firstWhere(
+            (l) => l.displayName == loc.displayName,
+            orElse: () => loc,
+          );
+          await NotificationService.postAlertNotification(
+            loc.displayName,
+            updated.cachedAlerts,
+          );
+        }
       } catch (_) {
         anyFailed = true;
       }
