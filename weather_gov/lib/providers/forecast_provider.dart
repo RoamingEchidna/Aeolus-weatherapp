@@ -28,6 +28,7 @@ class ForecastProvider extends ChangeNotifier {
   bool use24Hour = false;
   bool useMetric = false;
   bool syncPinnedOnOpen = false;
+  bool severeWeatherNotifications = false;
   bool isLoading = false;
   String? errorMessage;
 
@@ -91,6 +92,7 @@ class ForecastProvider extends ChangeNotifier {
     use24Hour = _prefs.getBool('use24Hour') ?? false;
     useMetric = _prefs.getBool('useMetric') ?? false;
     syncPinnedOnOpen = _prefs.getBool('syncPinnedOnOpen') ?? false;
+    severeWeatherNotifications = _prefs.getBool('severeWeatherNotifications') ?? false;
     for (final row in kAllRows) {
       final saved = _prefs.getBool('row_$row');
       if (saved != null) visibleRows[row] = saved;
@@ -112,6 +114,7 @@ class ForecastProvider extends ChangeNotifier {
     _prefs.setBool('use24Hour', use24Hour);
     _prefs.setBool('useMetric', useMetric);
     _prefs.setBool('syncPinnedOnOpen', syncPinnedOnOpen);
+    _prefs.setBool('severeWeatherNotifications', severeWeatherNotifications);
     for (final entry in visibleRows.entries) {
       _prefs.setBool('row_${entry.key}', entry.value);
     }
@@ -334,6 +337,12 @@ class ForecastProvider extends ChangeNotifier {
     } else {
       BackgroundSyncService.cancel();
     }
+    notifyListeners();
+  }
+
+  void toggleSevereWeatherNotifications() {
+    severeWeatherNotifications = !severeWeatherNotifications;
+    _savePreferences();
     notifyListeners();
   }
 }
