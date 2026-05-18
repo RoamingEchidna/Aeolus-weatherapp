@@ -10,12 +10,14 @@ import 'services/nominatim_service.dart';
 import 'services/cache_service.dart';
 import 'services/usno_service.dart';
 import 'services/openuv_service.dart';
+import 'services/notification_service.dart';
 import 'ui/chart_screen.dart';
 import 'background_worker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Workmanager().initialize(backgroundWorkerCallback);
+  await NotificationService.initialize();
   final prefs = await SharedPreferences.getInstance();
   final client = http.Client();
 
