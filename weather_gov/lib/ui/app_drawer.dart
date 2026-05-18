@@ -291,6 +291,18 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
 
+            // Severe Weather Alerts toggle
+            SwitchListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.only(left: 12, right: 4),
+              value: provider.severeWeatherNotifications,
+              onChanged: (_) => provider.toggleSevereWeatherNotifications(),
+              title: Text(
+                'Severe Weather Alerts',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+
             // Dark mode toggle
             SwitchListTile(
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
