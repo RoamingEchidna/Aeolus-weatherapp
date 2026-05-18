@@ -38,9 +38,7 @@ class NotificationService {
 
     if (active.isEmpty) return;
 
-    final count = active.length;
-    final names = active.map((a) => a.event).join(', ');
-    final body = '$count active ${count == 1 ? 'alert' : 'alerts'}: $names';
+    final body = active.map((a) => a.event).join(', ');
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
