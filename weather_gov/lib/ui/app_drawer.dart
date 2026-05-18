@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:workmanager/workmanager.dart';
 import '../providers/forecast_provider.dart';
-import '../services/background_sync_service.dart';
 
 class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
@@ -314,24 +312,6 @@ class _AppDrawerState extends State<AppDrawer> {
                 'Severe Weather Alerts',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-            ),
-
-            // DEBUG: trigger background worker in 10 seconds
-            ListTile(
-              dense: true,
-              contentPadding: const EdgeInsets.only(left: 12, right: 4),
-              leading: const Icon(Icons.bug_report, size: 18),
-              title: Text('Test Sync Now (10s)', style: Theme.of(context).textTheme.bodyMedium),
-              onTap: () async {
-                await Workmanager().registerOneOffTask(
-                  'debug_sync',
-                  kSyncTaskMidnight,
-                  initialDelay: const Duration(seconds: 10),
-                  constraints: Constraints(networkType: NetworkType.connected),
-                  existingWorkPolicy: ExistingWorkPolicy.replace,
-                );
-                if (context.mounted) Navigator.pop(context);
-              },
             ),
 
             // Dark mode toggle
