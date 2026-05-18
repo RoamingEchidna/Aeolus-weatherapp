@@ -291,12 +291,14 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
 
-            // Severe Weather Alerts toggle
+            // Severe Weather Alerts toggle (requires Auto Sync)
             SwitchListTile(
               dense: true,
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
               value: provider.severeWeatherNotifications,
-              onChanged: (_) => provider.toggleSevereWeatherNotifications(),
+              onChanged: provider.syncPinnedOnOpen
+                  ? (_) => provider.toggleSevereWeatherNotifications()
+                  : null,
               title: Text(
                 'Severe Weather Alerts',
                 style: Theme.of(context).textTheme.bodyMedium,
