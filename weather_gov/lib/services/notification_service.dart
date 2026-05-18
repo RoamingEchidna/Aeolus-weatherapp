@@ -51,7 +51,7 @@ class NotificationService {
       ),
     );
 
-    final id = locationName.hashCode.abs() % 100000;
+    final id = locationName.hashCode.abs();
     await _plugin.show(id, locationName, body, details);
   }
 }
