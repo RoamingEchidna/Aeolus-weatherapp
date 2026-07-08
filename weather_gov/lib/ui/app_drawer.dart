@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -21,6 +22,17 @@ class _AppDrawerState extends State<AppDrawer> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    // Diagnostic keys are written by the background isolate, so re-read
+    // them from disk whenever the drawer opens rather than trusting
+    // whatever was cached in memory at app launch.
+    context.read<ForecastProvider>().refreshSyncDiagnostics();
+  }
+
+  String _formatSyncDiagTime(String? iso) {
+    if (iso == null) return 'never';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return 'never';
+    return DateFormat('MMM d, h:mm a').format(dt);
   }
 
   @override
@@ -258,18 +270,20 @@ class _AppDrawerState extends State<AppDrawer> {
                       style: Theme.of(context).textTheme.bodyMedium),
                   const Spacer(),
                   GestureDetector(
-                    onTap: provider.isLoading || provider.currentLocation == null
+                    onTap: provider.isLoading ||
+                            !provider.savedLocations.any((l) => l.isPinned)
                         ? null
                         : () {
                             Navigator.pop(context);
-                            provider.refreshCurrentLocation();
+                            provider.refreshPinnedLocations();
                           },
                     child: Container(
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: provider.isLoading || provider.currentLocation == null
+                        color: provider.isLoading ||
+                                !provider.savedLocations.any((l) => l.isPinned)
                             ? Theme.of(context).disabledColor
                             : Theme.of(context).colorScheme.primary,
                       ),
@@ -290,6 +304,14 @@ class _AppDrawerState extends State<AppDrawer> {
                   ),
                 ],
               ),
+              subtitle: provider.syncPinnedOnOpen
+                  ? Text(
+                      'Last attempt: ${_formatSyncDiagTime(provider.lastSyncAttemptAt)}'
+                      ' (${provider.lastSyncResult ?? "pending"})\n'
+                      'Next scheduled: ${_formatSyncDiagTime(provider.nextSyncScheduledFor)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    )
+                  : null,
             ),
 
             // Severe Weather Alerts toggle (requires Auto Sync)

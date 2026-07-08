@@ -66,6 +66,21 @@ class ForecastProvider extends ChangeNotifier {
 
   String? get openUvApiKey => _prefs?.getString('openUvApiKey');
 
+  // Background-sync diagnostics, so the on/off toggle isn't a black box —
+  // see background_worker.dart for where these get written.
+  String? get lastSyncScheduledAt => _prefs?.getString(kPrefLastScheduledAt);
+  String? get nextSyncScheduledFor => _prefs?.getString(kPrefNextScheduledFor);
+  String? get lastSyncAttemptAt => _prefs?.getString(kPrefLastSyncAttemptAt);
+  String? get lastSyncResult => _prefs?.getString(kPrefLastSyncResult);
+  String? get lastSyncCompletedAt => _prefs?.getString(kPrefLastSyncCompletedAt);
+
+  /// Re-reads diagnostic keys from disk. Needed because the background
+  /// isolate writes them independently of this provider's in-memory state.
+  Future<void> refreshSyncDiagnostics() async {
+    await _prefs?.reload();
+    notifyListeners();
+  }
+
   Future<void> setOpenUvApiKey(String key) async {
     final trimmed = key.trim();
     if (trimmed.isEmpty) {
@@ -265,6 +280,41 @@ class ForecastProvider extends ChangeNotifier {
     _sortLocations();
     _cacheService.saveAll(savedLocations);
     currentLocation = location;
+  }
+
+  Future<void> refreshPinnedLocations() async {
+    final pinned = savedLocations
+        .where((l) => l.isPinned && l.displayName != 'Narnia')
+        .toList();
+    if (pinned.isEmpty) return;
+
+    final originalCurrentDisplayName = currentLocation?.displayName;
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+
+    var anyFailed = false;
+    for (final loc in pinned) {
+      try {
+        await _fetchAndSave(loc.displayName, loc.lat, loc.lon,
+            postcode: loc.postcode);
+      } catch (_) {
+        anyFailed = true;
+      }
+    }
+
+    // _fetchAndSave reassigns currentLocation on every call; restore
+    // whichever location was actually open before this refresh.
+    if (originalCurrentDisplayName != null) {
+      currentLocation = savedLocations
+              .where((l) => l.displayName == originalCurrentDisplayName)
+              .firstOrNull ??
+          currentLocation;
+    }
+
+    errorMessage = anyFailed ? 'Some locations failed to refresh, showing cached data' : null;
+    isLoading = false;
+    notifyListeners();
   }
 
   void loadTestLocation() {

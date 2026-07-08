@@ -1,8 +1,18 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 const kSyncTaskMidnight = 'nightly_sync';
 const kSyncTask3am = 'nightly_sync_3am';
 const kSyncTask6am = 'nightly_sync_6am';
+
+// Diagnostic keys so the UI can show whether scheduling/execution are
+// actually happening on-device, since WorkManager failures are otherwise
+// invisible (no logs, no crash reports for a headless background isolate).
+const kPrefLastScheduledAt = 'diag_lastScheduledAt';
+const kPrefNextScheduledFor = 'diag_nextScheduledFor';
+const kPrefLastSyncAttemptAt = 'diag_lastSyncAttemptAt';
+const kPrefLastSyncResult = 'diag_lastSyncResult';
+const kPrefLastSyncCompletedAt = 'diag_lastSyncCompletedAt';
 
 class BackgroundSyncService {
   static Future<void> schedule() async {
@@ -11,11 +21,14 @@ class BackgroundSyncService {
 
     final now = DateTime.now();
     var midnight = DateTime(now.year, now.month, now.day + 1, 0, 1);
-    // If it's before 12:01AM, target tonight instead of tomorrow.
     if (now.isBefore(DateTime(now.year, now.month, now.day, 0, 1))) {
       midnight = DateTime(now.year, now.month, now.day, 0, 1);
     }
     final delay = midnight.difference(now);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(kPrefLastScheduledAt, now.toIso8601String());
+    await prefs.setString(kPrefNextScheduledFor, midnight.toIso8601String());
 
     await Workmanager().registerOneOffTask(
       kSyncTaskMidnight,
