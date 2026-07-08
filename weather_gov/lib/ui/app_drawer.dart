@@ -35,6 +35,52 @@ class _AppDrawerState extends State<AppDrawer> {
     return DateFormat('MMM d, h:mm a').format(dt);
   }
 
+  void _showBatteryOptimizationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Keep background sync reliable'),
+        content: const Text(
+          "Android's battery optimization can delay or block nightly "
+          "background syncs on some phones. For sync to run reliably, set "
+          "Aeolus's battery setting to Unrestricted.\n\n"
+          'You can change this anytime in Settings → Apps → Aeolus → Battery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openBatterySettings();
+            },
+            child: const Text('Open Battery Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openBatterySettings() async {
+    const pkg = 'com.weathergov.weather_gov';
+    // Deep-links straight to the app's Battery settings page on stock
+    // Android; falls back to the general App Info page if unsupported.
+    final primary = Uri.parse(
+        'intent:package:$pkg#Intent;action=android.settings.APP_BATTERY_SETTINGS;end');
+    final fallback = Uri.parse(
+        'intent:package:$pkg#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;end');
+    try {
+      final opened =
+          await launchUrl(primary, mode: LaunchMode.externalApplication);
+      if (opened) return;
+    } catch (_) {}
+    try {
+      await launchUrl(fallback, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -263,7 +309,14 @@ class _AppDrawerState extends State<AppDrawer> {
               dense: true,
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
               value: provider.syncPinnedOnOpen,
-              onChanged: (_) => provider.toggleSyncPinnedOnOpen(),
+              onChanged: (_) {
+                final turningOn = !provider.syncPinnedOnOpen;
+                provider.toggleSyncPinnedOnOpen();
+                if (turningOn && provider.shouldShowBatteryWarning) {
+                  provider.recordBatteryWarningShown();
+                  _showBatteryOptimizationDialog(context);
+                }
+              },
               title: Row(
                 children: [
                   Text('Auto Sync',

@@ -74,6 +74,21 @@ class ForecastProvider extends ChangeNotifier {
   String? get lastSyncResult => _prefs?.getString(kPrefLastSyncResult);
   String? get lastSyncCompletedAt => _prefs?.getString(kPrefLastSyncCompletedAt);
 
+  static const _batteryWarningCooldown = Duration(days: 15);
+
+  /// Whether the battery-optimization warning dialog should be shown again
+  /// (i.e. it either hasn't been shown before, or it's been 15+ days).
+  bool get shouldShowBatteryWarning {
+    final raw = _prefs?.getString('lastBatteryWarningShownAt');
+    final last = raw != null ? DateTime.tryParse(raw) : null;
+    if (last == null) return true;
+    return DateTime.now().difference(last) >= _batteryWarningCooldown;
+  }
+
+  void recordBatteryWarningShown() {
+    _prefs?.setString('lastBatteryWarningShownAt', DateTime.now().toIso8601String());
+  }
+
   /// Re-reads diagnostic keys from disk. Needed because the background
   /// isolate writes them independently of this provider's in-memory state.
   Future<void> refreshSyncDiagnostics() async {
