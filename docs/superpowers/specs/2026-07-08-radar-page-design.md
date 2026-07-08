@@ -171,3 +171,79 @@ the local-time text. Disabled when `currentLocation == null`.
 
 - `path_provider` — app cache directory for the frame cache. Well-maintained
   first-party Flutter plugin; no manifest changes needed.
+
+## Implementation notes (read before writing code)
+
+Concrete gotchas verified against the live services; deviating from these
+will produce hard-to-debug blank images or 400s.
+
+1. **TIME values must be echoed verbatim.** GeoServer lists timestamps like
+   `2026-07-08T16:13:01.000Z` in the capabilities `<Dimension name="time">`
+   extent. Pass that exact string as the `time=` GetMap parameter. Do NOT
+   round-trip through `DateTime.parse(...).toIso8601String()` — Dart drops
+   or reformats the milliseconds and GeoServer may return an empty image for
+   a non-matching time. Keep the original string as the canonical frame key;
+   parse to `DateTime` only for sorting, display, and eviction math. In cache
+   filenames, encode the string's `millisecondsSinceEpoch` (colons are not
+   filename-safe).
+
+2. **Axis order.** Use `crs=CRS:84` everywhere so bbox is
+   `minLon,minLat,maxLon,maxLat`. Do not use `EPSG:4326` with WMS 1.3.0 —
+   it swaps to lat-first and silently returns a wrong/blank crop.
+
+3. **Station id casing.** `api.weather.gov` returns `KABR`; the GeoServer
+   workspace and layer are lowercase: `.../geoserver/kabr/ows`,
+   `layers=kabr_sr_bref`.
+
+4. **Filter stations to `stationType == "WSR-88D"`.** The list also contains
+   TDWR sites whose layer naming/products differ.
+
+5. **Fallback chain:** nearest WSR-88D > 200 km OR station-list fetch fails
+   OR the station's own GetCapabilities fails → composite
+   (`.../geoserver/conus/conus_bref_qcd/ows`, `layers=conus_bref_qcd`, same
+   TIME handling). Cache the resolved source per rounded lat/lon in
+   `SharedPreferences` (`radarSource_{lat}_{lon}` → station id or `conus`)
+   so the ~large station-list download doesn't repeat every page open.
+
+6. **Always send `styles=` (empty) in GetMap** — the parameter is mandatory
+   in WMS even when empty, and the ArcGIS boundary server is stricter than
+   GeoServer. For the two-layer boundary call use `layers=8,9&styles=,`.
+
+7. **Sample requests** (bbox for lat 37.36, lon −118.40, ±2°):
+   - Frame:
+     `https://opengeo.ncep.noaa.gov/geoserver/kesx/ows?service=WMS&version=1.3.0&request=GetMap&layers=kesx_sr_bref&styles=&crs=CRS:84&bbox=-120.40,35.36,-116.40,39.36&width=800&height=800&format=image/png&transparent=true&time=2026-07-08T18:04:04.000Z`
+   - Boundaries:
+     `https://mapservices.weather.noaa.gov/static/services/nws_reference_maps/nws_reference_map/MapServer/WMSServer?service=WMS&version=1.3.0&request=GetMap&layers=8,9&styles=,&crs=CRS:84&bbox=-120.40,35.36,-116.40,39.36&width=800&height=800&format=image/png&transparent=true`
+   - Send `User-Agent: WeatherGovApp/1.0` on every request (existing app
+     convention; NOAA asks for an identifying UA).
+
+8. **Capabilities parsing:** extract the time extent with a targeted regex /
+   string scan for the `{layer}` block's `<Dimension name="time">…</Dimension>`
+   content (comma-separated list). Do not add an XML-parsing dependency for
+   this.
+
+9. **Flicker-free playback:** render frames with
+   `Image.memory(bytes, gaplessPlayback: true)` — without `gaplessPlayback`
+   every frame swap flashes white. Drive playback with a `Timer.periodic`
+   held in the screen state; cancel and recreate it on speed change; cancel
+   in `dispose()`.
+
+10. **Fetch order:** fetch the newest missing frame first and display it
+    immediately as a static image, then backfill older frames; start the
+    loop when backfilling completes. The user sees current conditions in
+    one round-trip instead of waiting for ~18 fetches.
+
+11. **Dark mode:** boundary strokes from the NOAA server are dark; give the
+    map `Stack` a fixed light neutral background (e.g. `Colors.grey.shade300`)
+    in both themes rather than the theme surface color, or lines vanish in
+    dark mode.
+
+12. **Marker math:** with the image rendered in a square `AspectRatio(1)` /
+    `LayoutBuilder`, the dot position is
+    `dx = (lon − minLon) / (maxLon − minLon) * renderWidth`,
+    `dy = (maxLat − lat) / (maxLat − minLat) * renderHeight` (y inverted).
+
+13. **Scope discipline:** no changes to `ForecastProvider` state, background
+    worker, or sync logic. New files only, plus the one `IconButton` added to
+    `chart_screen.dart`'s AppBar `actions`. Run
+    `flutter analyze` on all touched files before claiming completion.
