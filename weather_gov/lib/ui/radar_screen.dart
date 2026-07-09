@@ -39,6 +39,10 @@ class _RadarScreenState extends State<RadarScreen> {
   String? _error; // fatal: nothing to show
   String? _notice; // non-fatal: showing cached frames
 
+  // Incremented on every _load; each run aborts after any await if a newer
+  // run has started (refresh mid-backfill) or the screen was disposed.
+  int _loadGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -57,7 +61,12 @@ class _RadarScreenState extends State<RadarScreen> {
     if (_index >= _times.length) _index = _times.isEmpty ? 0 : _times.length - 1;
   }
 
+  /// True when [gen] is no longer the active load (a newer _load started)
+  /// or the screen is gone — the stale run must stop touching state.
+  bool _stale(int gen) => gen != _loadGeneration || !mounted;
+
   Future<void> _load() async {
+    final gen = ++_loadGeneration;
     _timer?.cancel();
     setState(() {
       _loading = true;
@@ -73,12 +82,14 @@ class _RadarScreenState extends State<RadarScreen> {
       // Evict stale frames from disk AND memory (refresh path re-enters here).
       final cutoff = DateTime.now().subtract(_maxAge);
       await _cache.evictOlderThan(cutoff);
+      if (_stale(gen)) return;
       _frames.removeWhere(
           (millis, _) => millis < cutoff.millisecondsSinceEpoch);
 
       final prefs = await SharedPreferences.getInstance();
       _service ??= RadarService(prefs: prefs);
       var source = await _service!.resolveSource(lat, lon);
+      if (_stale(gen)) return;
 
       // Boundaries: memory -> disk -> network; tolerate total failure.
       _boundaries ??= await _cache.loadBoundaries(lat, lon);
@@ -90,11 +101,14 @@ class _RadarScreenState extends State<RadarScreen> {
           // Radar without boundaries is still usable.
         }
       }
+      if (_stale(gen)) return;
 
       // Paint whatever is already cached before any network wait.
-      _frames.addAll(await _cache.loadFrames(source.sourceKey, lat, lon));
+      final cached = await _cache.loadFrames(source.sourceKey, lat, lon);
+      if (_stale(gen)) return;
+      _frames.addAll(cached);
       _rebuildTimes();
-      if (_frames.isNotEmpty && mounted) {
+      if (_frames.isNotEmpty) {
         setState(() {
           _loading = false;
           _index = _times.length - 1;
@@ -108,12 +122,15 @@ class _RadarScreenState extends State<RadarScreen> {
       } catch (_) {
         if (source.isComposite) rethrow;
         source = const RadarSource.composite();
+        final compCached = await _cache.loadFrames(source.sourceKey, lat, lon);
+        if (_stale(gen)) return;
         _frames
           ..clear()
-          ..addAll(await _cache.loadFrames(source.sourceKey, lat, lon));
+          ..addAll(compCached);
         _rebuildTimes();
         available = await _service!.fetchAvailableTimes(source);
       }
+      if (_stale(gen)) return;
 
       // Fetch missing frames newest-first so current conditions paint in
       // one round-trip; older frames backfill behind it.
@@ -127,21 +144,23 @@ class _RadarScreenState extends State<RadarScreen> {
         try {
           final bytes = await _service!.fetchFrame(source, _bbox, t);
           final millis = DateTime.parse(t).millisecondsSinceEpoch;
-          _frames[millis] = bytes;
+          // Save to disk even if stale — the fetch already happened and the
+          // next load reads it from cache. Only in-memory state is off-limits.
           await _cache.saveFrame(source.sourceKey, lat, lon, millis, bytes);
+          if (_stale(gen)) return;
+          _frames[millis] = bytes;
           _rebuildTimes();
-          if (mounted) {
-            setState(() {
-              _loading = false;
-              _index = _times.length - 1;
-            });
-          }
+          setState(() {
+            _loading = false;
+            _index = _times.length - 1;
+          });
         } catch (_) {
           // Skip failed frames; the loop plays what it has.
+          if (_stale(gen)) return;
         }
       }
 
-      if (!mounted) return;
+      if (_stale(gen)) return;
       if (_frames.isEmpty) {
         setState(() {
           _loading = false;
@@ -152,7 +171,7 @@ class _RadarScreenState extends State<RadarScreen> {
       setState(() => _loading = false);
       _startPlayback();
     } catch (_) {
-      if (!mounted) return;
+      if (_stale(gen)) return;
       setState(() {
         _loading = false;
         if (_frames.isEmpty) {
