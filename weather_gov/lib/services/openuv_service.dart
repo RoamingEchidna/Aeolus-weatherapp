@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../secrets.dart';
@@ -6,6 +7,7 @@ class OpenUvService {
   final http.Client _client;
   String? _overrideKey; // set at runtime from SharedPreferences
   static const _base = 'https://api.openuv.io/api/v1/uv';
+  static const _requestTimeout = Duration(minutes: 1);
 
   OpenUvService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -27,7 +29,7 @@ class OpenUvService {
       final uri = Uri.parse(
         '$_base?lat=${lat.toStringAsFixed(4)}&lng=${lon.toStringAsFixed(4)}&dt=${Uri.encodeComponent(dt)}',
       );
-      final response = await _client.get(uri, headers: _headers);
+      final response = await _client.get(uri, headers: _headers).timeout(_requestTimeout);
       if (response.statusCode != 200) return null;
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       final result = json['result'] as Map<String, dynamic>?;

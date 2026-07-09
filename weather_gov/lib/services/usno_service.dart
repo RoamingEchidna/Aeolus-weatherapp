@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/astro_day.dart';
@@ -5,6 +6,7 @@ import '../models/astro_day.dart';
 class UsnoService {
   final http.Client _client;
   static const _base = 'https://aa.usno.navy.mil/api/rstt/oneday';
+  static const _requestTimeout = Duration(minutes: 1);
 
   UsnoService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -37,7 +39,7 @@ class UsnoService {
     final uri = Uri.parse(
         '$_base?date=$dateStr&coords=$lat,$lon&tz=$tzOffsetHours');
     try {
-      final resp = await _client.get(uri);
+      final resp = await _client.get(uri).timeout(_requestTimeout);
       if (resp.statusCode != 200) return AstroDay.sentinel(date);
 
       final body = json.decode(resp.body) as Map<String, dynamic>;

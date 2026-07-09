@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/hourly_period.dart';
 import '../models/weather_alert.dart';
+
+const _kRequestTimeout = Duration(minutes: 1);
 
 class NwsForecastResult {
   final String locationName;
@@ -170,7 +173,8 @@ class NwsService {
     // Step 1: resolve grid point
     final pointsUri = Uri.parse(
         '$_base/points/${lat.toStringAsFixed(4)},${lon.toStringAsFixed(4)}');
-    final pointsResp = await _client.get(pointsUri, headers: _headers);
+    final pointsResp =
+        await _client.get(pointsUri, headers: _headers).timeout(_kRequestTimeout);
 
     if (pointsResp.statusCode == 404) {
       throw const NwsUnsupportedLocationException(
@@ -192,9 +196,9 @@ class NwsService {
     // Steps 2, 3, 4 fire in parallel
     final alertsUri = Uri.parse('$_base/alerts/active?point=$lat,$lon');
     final responses = await Future.wait([
-      _client.get(Uri.parse(hourlyUrl), headers: _headers),
-      _client.get(alertsUri, headers: _headers),
-      _client.get(Uri.parse(gridDataUrl), headers: _headers),
+      _client.get(Uri.parse(hourlyUrl), headers: _headers).timeout(_kRequestTimeout),
+      _client.get(alertsUri, headers: _headers).timeout(_kRequestTimeout),
+      _client.get(Uri.parse(gridDataUrl), headers: _headers).timeout(_kRequestTimeout),
     ]);
 
     final hourlyResp  = responses[0];

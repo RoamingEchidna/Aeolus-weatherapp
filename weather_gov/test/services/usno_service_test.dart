@@ -1,3 +1,4 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -86,6 +87,28 @@ void main() {
       );
 
       expect(days.length, 2);
+    });
+
+    test('returns sentinel instead of hanging forever when a request never responds', () {
+      fakeAsync((async) {
+        final client = MockClient((_) => Future.delayed(
+              const Duration(minutes: 10),
+              () => http.Response(_kUsnoResponse, 200),
+            ));
+        final service = UsnoService(client: client);
+
+        List<AstroDay>? result;
+        service.fetchAstroData(
+          lat: 38.9, lon: -77.0,
+          windowStart: windowStart, windowEnd: windowEnd,
+          tzOffsetHours: -4,
+        ).then((r) => result = r);
+
+        async.elapse(const Duration(minutes: 2));
+
+        expect(result, isNotNull);
+        expect(result!.first.isSentinel, isTrue);
+      });
     });
   });
 }

@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -92,6 +95,28 @@ void main() {
         () => service.fetchForecast(0.0, 0.0),
         throwsA(isA<NwsUnsupportedLocationException>()),
       );
+    });
+
+    test('times out instead of hanging forever when a request never responds', () {
+      fakeAsync((async) {
+        final client = MockClient((_) => Future.delayed(
+              const Duration(minutes: 10),
+              () => http.Response(_pointsResponse, 200),
+            ));
+        final service = NwsService(client: client);
+
+        Object? capturedError;
+        service.fetchForecast(37.3636, -118.394).then(
+              (_) {},
+              onError: (Object e) {
+                capturedError = e;
+              },
+            );
+
+        async.elapse(const Duration(minutes: 2));
+
+        expect(capturedError, isA<TimeoutException>());
+      });
     });
   });
 }
