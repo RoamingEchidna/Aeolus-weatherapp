@@ -136,4 +136,78 @@ void main() {
       expect(s2.stationId, 'KNEAR');
     });
   });
+
+  group('RadarService WMS requests', () {
+    test('fetchAvailableTimes issues GetCapabilities and parses times',
+        () async {
+      late Uri captured;
+      final service = RadarService(
+        client: MockClient((req) async {
+          captured = req.url;
+          return http.Response(_kCapabilitiesXml, 200);
+        }),
+      );
+      final times =
+          await service.fetchAvailableTimes(const RadarSource.station('KABR'));
+      expect(captured.toString(),
+          'https://opengeo.ncep.noaa.gov/geoserver/kabr/ows?service=WMS&version=1.3.0&request=GetCapabilities');
+      expect(times.length, 3);
+      expect(times.first, '2026-07-08T16:13:01.000Z');
+    });
+
+    test('fetchFrame builds a correct GetMap URL with verbatim time',
+        () async {
+      late Uri captured;
+      final service = RadarService(
+        client: MockClient((req) async {
+          captured = req.url;
+          return http.Response.bytes([1, 2, 3], 200);
+        }),
+      );
+      final box = LatLonBox.around(37.36, -118.40, 2.0);
+      final bytes = await service.fetchFrame(
+          const RadarSource.station('KABR'), box, '2026-07-08T16:13:01.000Z');
+
+      expect(bytes, [1, 2, 3]);
+      final q = captured.queryParameters;
+      expect(q['crs'], 'CRS:84');
+      expect(q['bbox'], '-120.40,35.36,-116.40,39.36');
+      expect(q['layers'], 'kabr_sr_bref');
+      expect(q['styles'], '');
+      expect(q['time'], '2026-07-08T16:13:01.000Z');
+      expect(q['transparent'], 'true');
+      expect(q['width'], '800');
+      expect(q['height'], '800');
+    });
+
+    test('fetchBoundaries requests states+counties in one call', () async {
+      late Uri captured;
+      final service = RadarService(
+        client: MockClient((req) async {
+          captured = req.url;
+          return http.Response.bytes([9], 200);
+        }),
+      );
+      final box = LatLonBox.around(37.36, -118.40, 2.0);
+      await service.fetchBoundaries(box);
+
+      expect(captured.host, 'mapservices.weather.noaa.gov');
+      final q = captured.queryParameters;
+      expect(q['layers'], '8,9');
+      expect(q['styles'], ',');
+      expect(q['crs'], 'CRS:84');
+      expect(q['bbox'], '-120.40,35.36,-116.40,39.36');
+    });
+
+    test('fetchFrame throws on non-200', () async {
+      final service = RadarService(
+          client: MockClient((_) async => http.Response('err', 500)));
+      final box = LatLonBox.around(37.36, -118.40, 2.0);
+      expect(
+        () => service.fetchFrame(
+            const RadarSource.composite(), box, '2026-07-08T16:13:01.000Z'),
+        throwsException,
+      );
+    });
+  });
 }

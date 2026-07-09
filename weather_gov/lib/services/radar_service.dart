@@ -130,6 +130,47 @@ class RadarService {
     }
   }
 
+  /// Lists available frame timestamps (verbatim strings, oldest first).
+  Future<List<String>> fetchAvailableTimes(RadarSource source) async {
+    final uri = Uri.parse(
+        '${source.owsBase}?service=WMS&version=1.3.0&request=GetCapabilities');
+    final resp = await _client.get(uri, headers: _headers);
+    if (resp.statusCode != 200) {
+      throw Exception('GetCapabilities error ${resp.statusCode}');
+    }
+    return parseTimeDimension(resp.body, source.layerName);
+  }
+
+  /// Fetches one reflectivity frame PNG. [time] must be a verbatim string
+  /// from [fetchAvailableTimes].
+  Future<Uint8List> fetchFrame(
+      RadarSource source, LatLonBox bbox, String time) async {
+    final uri = Uri.parse('${source.owsBase}?service=WMS&version=1.3.0'
+        '&request=GetMap&layers=${source.layerName}&styles='
+        '&crs=CRS:84&bbox=${bbox.bboxParam}'
+        '&width=800&height=800&format=image/png&transparent=true'
+        '&time=$time');
+    final resp = await _client.get(uri, headers: _headers);
+    if (resp.statusCode != 200) {
+      throw Exception('GetMap error ${resp.statusCode}');
+    }
+    return resp.bodyBytes;
+  }
+
+  /// Fetches the state+county boundaries overlay PNG (transparent
+  /// background) for the same bbox as the frames.
+  Future<Uint8List> fetchBoundaries(LatLonBox bbox) async {
+    final uri = Uri.parse('$_boundariesBase?service=WMS&version=1.3.0'
+        '&request=GetMap&layers=8,9&styles=,'
+        '&crs=CRS:84&bbox=${bbox.bboxParam}'
+        '&width=800&height=800&format=image/png&transparent=true');
+    final resp = await _client.get(uri, headers: _headers);
+    if (resp.statusCode != 200) {
+      throw Exception('boundaries GetMap error ${resp.statusCode}');
+    }
+    return resp.bodyBytes;
+  }
+
   static double _haversineKm(
       double lat1, double lon1, double lat2, double lon2) {
     const r = 6371.0;
