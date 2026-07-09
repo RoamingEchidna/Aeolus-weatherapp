@@ -6,6 +6,7 @@ import '../models/saved_location.dart';
 import '../providers/forecast_provider.dart';
 import 'app_drawer.dart';
 import 'alert_banner.dart';
+import 'radar_screen.dart';
 import 'scrollable_chart.dart';
 
 class ChartScreen extends StatefulWidget {
@@ -69,6 +70,20 @@ class _ChartScreenState extends State<ChartScreen> {
                 ],
               ),
         centerTitle: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.radar),
+            tooltip: 'Radar',
+            onPressed: location == null
+                ? null
+                : () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RadarScreen(location: location),
+                      ),
+                    ),
+          ),
+        ],
       ),
       drawer: const AppDrawer(),
       body: Column(
