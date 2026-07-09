@@ -77,4 +77,68 @@ class RadarService {
     times.sort((a, b) => DateTime.parse(a).compareTo(DateTime.parse(b)));
     return times;
   }
+
+  /// Finds the nearest WSR-88D station to (lat, lon). Falls back to the
+  /// CONUS composite when the nearest is farther than
+  /// [maxStationDistanceKm] or the lookup fails. Successful resolutions
+  /// are cached in prefs; failures are never cached so a transient network
+  /// error can't permanently lock a location to the composite.
+  Future<RadarSource> resolveSource(double lat, double lon) async {
+    final cacheKey =
+        'radarSource_${lat.toStringAsFixed(2)}_${lon.toStringAsFixed(2)}';
+    final cached = _prefs?.getString(cacheKey);
+    if (cached != null) {
+      return cached == 'conus'
+          ? const RadarSource.composite()
+          : RadarSource.station(cached);
+    }
+
+    try {
+      final resp = await _client.get(
+        Uri.parse(_stationsUrl),
+        headers: {..._headers, 'Accept': 'application/geo+json'},
+      );
+      if (resp.statusCode != 200) {
+        throw Exception('stations error ${resp.statusCode}');
+      }
+      final features =
+          (json.decode(resp.body)['features'] as List<dynamic>? ?? []);
+
+      String? bestId;
+      var bestKm = double.infinity;
+      for (final f in features) {
+        final props = f['properties'] as Map<String, dynamic>? ?? {};
+        if (props['stationType'] != 'WSR-88D') continue;
+        final coords = f['geometry']?['coordinates'] as List<dynamic>?;
+        final id = props['id'] as String?;
+        if (coords == null || coords.length < 2 || id == null) continue;
+        final km = _haversineKm(
+            lat, lon, (coords[1] as num).toDouble(), (coords[0] as num).toDouble());
+        if (km < bestKm) {
+          bestKm = km;
+          bestId = id;
+        }
+      }
+
+      final source = (bestId != null && bestKm <= maxStationDistanceKm)
+          ? RadarSource.station(bestId)
+          : const RadarSource.composite();
+      await _prefs?.setString(cacheKey, source.stationId ?? 'conus');
+      return source;
+    } catch (_) {
+      return const RadarSource.composite();
+    }
+  }
+
+  static double _haversineKm(
+      double lat1, double lon1, double lat2, double lon2) {
+    const r = 6371.0;
+    final dLat = _rad(lat2 - lat1);
+    final dLon = _rad(lon2 - lon1);
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_rad(lat1)) * cos(_rad(lat2)) * sin(dLon / 2) * sin(dLon / 2);
+    return 2 * r * atan2(sqrt(a), sqrt(1 - a));
+  }
+
+  static double _rad(double deg) => deg * pi / 180;
 }
