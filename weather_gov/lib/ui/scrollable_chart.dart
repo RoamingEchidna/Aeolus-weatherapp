@@ -119,11 +119,39 @@ class _ScrollableChartState extends State<ScrollableChart>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _cursorX = _initCursorX();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(kLabelColumnWidth);
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _centerOnCursor());
+  }
+
+  @override
+  void didUpdateWidget(ScrollableChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // New forecast data (refresh, overnight sync, location switch) shifts
+    // what each x-position means, so snap the cursor back to now.
+    if (widget.periods.isNotEmpty &&
+        (oldWidget.periods.isEmpty ||
+            widget.periods.first.startTime != oldWidget.periods.first.startTime)) {
+      _cursorX = _initCursorX();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _centerOnCursor());
+    }
+  }
+
+  /// Scrolls so the cursor sits in the middle of the visible chart area
+  /// (right of the y-axis label column).
+  void _centerOnCursor({bool animate = false}) {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // Cursor's x in scroll-content coordinates includes the left padding.
+    final cursorContentX = kLabelColumnWidth + _pph + _cursorX;
+    final visibleCenter =
+        kLabelColumnWidth + (position.viewportDimension - kLabelColumnWidth) / 2;
+    final target =
+        (cursorContentX - visibleCenter).clamp(0.0, position.maxScrollExtent);
+    if (animate) {
+      _scrollController.animateTo(target,
+          duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+    } else {
+      _scrollController.jumpTo(target);
+    }
   }
 
   @override
@@ -397,7 +425,10 @@ class _ScrollableChartState extends State<ScrollableChart>
                     right: pph + kLabelColumnWidth,
                   ),
                   child: GestureDetector(
-                    onDoubleTap: () => setState(() => _cursorX = _initCursorX()),
+                    onDoubleTap: () {
+                      setState(() => _cursorX = _initCursorX());
+                      _centerOnCursor(animate: true);
+                    },
                     onLongPressStart: (details) {
                       if (_isPinching) return;
                       setState(() {
