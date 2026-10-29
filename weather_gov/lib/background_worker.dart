@@ -16,6 +16,7 @@ import 'models/saved_location.dart';
 void backgroundWorkerCallback() {
   Workmanager().executeTask((taskName, inputData) async {
     SharedPreferences? prefs;
+    var rescheduled = false;
     try {
       WidgetsFlutterBinding.ensureInitialized();
 
@@ -26,10 +27,12 @@ void backgroundWorkerCallback() {
       prefs = await SharedPreferences.getInstance();
       await prefs.setString(kPrefLastSyncAttemptAt, DateTime.now().toIso8601String());
 
-      await NotificationService.initialize();
-
-      // Always reschedule next midnight first, before any work.
+      // Always reschedule next midnight first, before any work, so a failure
+      // below can't break the nightly chain.
       await BackgroundSyncService.schedule();
+      rescheduled = true;
+
+      await NotificationService.initialize();
 
       // If the user turned the toggle off since this was scheduled, stop here.
       final enabled = prefs.getBool('syncPinnedOnOpen') ?? false;
@@ -88,10 +91,13 @@ void backgroundWorkerCallback() {
 
       client.close();
 
+      // Return true even on failure: the 3AM/6AM ladder is the retry
+      // mechanism. Returning false would also make WorkManager re-run this
+      // job on its own exponential backoff.
       if (anyFailed) {
         await _recordResult(prefs, 'partial_failure');
         await BackgroundSyncService.scheduleRetry(taskName);
-        return Future.value(false);
+        return Future.value(true);
       }
       await _recordResult(prefs, 'success');
       return Future.value(true);
@@ -100,7 +106,15 @@ void backgroundWorkerCallback() {
       // the headless isolate) still leaves a trace instead of the task
       // silently vanishing with no way to tell it ever ran.
       if (prefs != null) await _recordResult(prefs, 'error: $e');
-      return Future.value(false);
+      if (!rescheduled) {
+        // Tomorrow's run isn't booked — let WorkManager retry this job so
+        // the nightly chain doesn't die.
+        return Future.value(false);
+      }
+      try {
+        await BackgroundSyncService.scheduleRetry(taskName);
+      } catch (_) {}
+      return Future.value(true);
     }
   });
 }

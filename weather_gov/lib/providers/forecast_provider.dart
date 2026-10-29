@@ -54,6 +54,7 @@ class ForecastProvider extends ChangeNotifier {
     }
     _loadPreferences();
     notifyListeners();
+    BackgroundSyncService.removeLegacyTasks();
     if (syncPinnedOnOpen) BackgroundSyncService.schedule();
   }
 
@@ -93,6 +94,23 @@ class ForecastProvider extends ChangeNotifier {
   /// isolate writes them independently of this provider's in-memory state.
   Future<void> refreshSyncDiagnostics() async {
     await _prefs?.reload();
+    notifyListeners();
+  }
+
+  /// Re-reads saved locations from disk. The nightly sync runs in its own
+  /// isolate and writes straight to SharedPreferences, so an app left open in
+  /// the background would otherwise keep showing (and later re-save over)
+  /// its stale in-memory copy.
+  Future<void> reloadFromDisk() async {
+    if (isLoading) return;
+    await _prefs?.reload();
+    final currentName = currentLocation?.displayName;
+    savedLocations = _cacheService.loadAll();
+    _sortLocations();
+    currentLocation = savedLocations
+            .where((l) => l.displayName == currentName)
+            .firstOrNull ??
+        savedLocations.firstOrNull;
     notifyListeners();
   }
 

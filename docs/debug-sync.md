@@ -21,7 +21,22 @@ These come straight from `SharedPreferences` keys written by the background work
 If `diag_lastSyncResult` was never written after an attempt, the drawer falls back to showing
 `(pending)` — that's the symptom, not a distinct status the code ever sets.
 
-## Background: the bug this doc follows up on
+## The real cause of the permanent `(pending)` (fixed 2026-10-29)
+
+The worker's first step was `BackgroundSyncService.schedule()`, which called `cancel()` on the
+`nightly_sync` unique work name — the job that was *currently running* — and then re-registered
+that same name with `ExistingWorkPolicy.replace`, which cancels running work too. When WorkManager
+cancels a running job, the workmanager plugin's `BackgroundWorker.onStopped()` destroys the
+background Flutter engine, killing the sync seconds after it started. The attempt timestamp was
+already written, the result never was, so every night ended at `(pending)` with no data fetched.
+The 3 AM / 6 AM retries had the same self-cancel.
+
+Fix: every job is now registered under a per-date unique name (`nightly_sync_YYYYMMDD`,
+`nightly_sync_3am_YYYYMMDD`, …) with the tag `nightly_sync_chain`, so booking tomorrow never touches
+tonight's running job. `cancel()` (app-side only, never from the worker) cancels by tag.
+`test/services/background_sync_service_test.dart` guards against regressing this.
+
+## Earlier theory: request timeouts
 
 Every network call in the sync path (`NwsService`, `UsnoService`, `OpenUvService`) used to have
 no timeout. A single hung request could block the worker indefinitely; Android's WorkManager

@@ -16,13 +16,14 @@ class ChartScreen extends StatefulWidget {
   State<ChartScreen> createState() => _ChartScreenState();
 }
 
-class _ChartScreenState extends State<ChartScreen> {
+class _ChartScreenState extends State<ChartScreen> with WidgetsBindingObserver {
   Timer? _timer;
   DateTime _now = DateTime.now().toUtc();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Tick every 30 seconds so the displayed time stays fresh.
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       setState(() => _now = DateTime.now().toUtc());
@@ -31,8 +32,18 @@ class _ChartScreenState extends State<ChartScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Pick up whatever the background sync wrote while the app was hidden.
+    if (state == AppLifecycleState.resumed) {
+      setState(() => _now = DateTime.now().toUtc());
+      context.read<ForecastProvider>().reloadFromDisk();
+    }
   }
 
   List<Widget> _locationTimeParts(SavedLocation location, bool use24Hour, BuildContext context) {
