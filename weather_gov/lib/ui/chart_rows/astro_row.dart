@@ -193,7 +193,7 @@ class _AstroPainter extends CustomPainter {
           if (day.uvIndex != null) {
             const fontSize = 9.0;
             const gap = 3.0;
-            final textStyle = TextStyle(
+            const textStyle = TextStyle(
               color: kColorAstroNoon,
               fontSize: fontSize,
               fontWeight: FontWeight.bold,
@@ -226,7 +226,7 @@ class _AstroPainter extends CustomPainter {
       ..color = frameColor
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(0, 0), Offset(totalWidth, 0), framePaint);
+    canvas.drawLine(const Offset(0, 0), Offset(totalWidth, 0), framePaint);
     canvas.drawLine(Offset(0, size.height), Offset(totalWidth, size.height), framePaint);
   }
 

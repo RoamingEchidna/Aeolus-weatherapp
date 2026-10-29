@@ -45,13 +45,15 @@ void main() {
       expect(days.length, 1);
       final day = days.first;
       expect(day.isSentinel, isFalse);
-      expect(day.sunrise,   DateTime(2026, 4, 7, 6, 43));
-      expect(day.solarNoon, DateTime(2026, 4, 7, 13, 10));
-      expect(day.sunset,    DateTime(2026, 4, 7, 19, 38));
-      expect(day.beginCivilTwilight, DateTime(2026, 4, 7, 6, 16));
-      expect(day.endCivilTwilight,   DateTime(2026, 4, 7, 20, 5));
-      expect(day.moonrise, DateTime(2026, 4, 7, 14, 38));
-      expect(day.moonset,  DateTime(2026, 4, 7, 2, 25));
+      // Times are the location's wall clock, stored as UTC so they don't
+      // shift with the device's time zone.
+      expect(day.sunrise,   DateTime.utc(2026, 4, 7, 6, 43));
+      expect(day.solarNoon, DateTime.utc(2026, 4, 7, 13, 10));
+      expect(day.sunset,    DateTime.utc(2026, 4, 7, 19, 38));
+      expect(day.beginCivilTwilight, DateTime.utc(2026, 4, 7, 6, 16));
+      expect(day.endCivilTwilight,   DateTime.utc(2026, 4, 7, 20, 5));
+      expect(day.moonrise, DateTime.utc(2026, 4, 7, 14, 38));
+      expect(day.moonset,  DateTime.utc(2026, 4, 7, 2, 25));
     });
 
     test('returns sentinel on HTTP error', () async {

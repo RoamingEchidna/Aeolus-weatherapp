@@ -13,6 +13,7 @@ const _pointsResponse = '''
     "gridX": 16,
     "gridY": 169,
     "forecastHourly": "https://api.weather.gov/gridpoints/VEF/16,169/forecast/hourly",
+    "forecastGridData": "https://api.weather.gov/gridpoints/VEF/16,169",
     "relativeLocation": {
       "properties": { "city": "Bishop", "state": "CA" }
     },
@@ -80,7 +81,7 @@ void main() {
       final service = NwsService(client: client);
       final result = await service.fetchForecast(37.3636, -118.394);
 
-      expect(callCount, 3);
+      expect(callCount, 4); // points, hourly, alerts, gridpoint data
       expect(result.locationName, 'Bishop, CA');
       expect(result.periods.length, 1);
       expect(result.periods.first.temperature, 58);
