@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/saved_location.dart';
 import '../providers/forecast_provider.dart';
+import '../providers/settings_provider.dart';
 import 'app_drawer.dart';
 import 'alert_banner.dart';
 import 'radar_screen.dart';
@@ -77,7 +78,7 @@ class _ChartScreenState extends State<ChartScreen> with WidgetsBindingObserver {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  ..._locationTimeParts(location, provider.use24Hour, context),
+                  ..._locationTimeParts(location, context.watch<SettingsProvider>().use24Hour, context),
                 ],
               ),
         centerTitle: false,
@@ -99,11 +100,27 @@ class _ChartScreenState extends State<ChartScreen> with WidgetsBindingObserver {
       drawer: const AppDrawer(),
       body: Column(
         children: [
-          if (location != null) AlertBanner(alerts: location.cachedAlerts),
-          if (location != null) _CacheBanner(location: location),
-          if (provider.errorMessage != null)
-            _ErrorBanner(message: provider.errorMessage!),
-          if (provider.isLoading) const LinearProgressIndicator(),
+          // Ease banners in and out so the chart doesn't lurch in one frame.
+          AnimatedSize(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: Column(
+              children: [
+                if (location != null) AlertBanner(alerts: location.cachedAlerts),
+                if (location != null) _CacheBanner(location: location),
+                if (provider.errorMessage != null)
+                  _ErrorBanner(message: provider.errorMessage!),
+              ],
+            ),
+          ),
+          // Space is always reserved so the chart doesn't jump 4px per refresh.
+          SizedBox(
+            height: 4,
+            child: provider.isLoading ? const LinearProgressIndicator() : null,
+          ),
           Expanded(
             child: location == null
                 ? const _EmptyState()
@@ -135,7 +152,7 @@ class _CacheBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final use24Hour = context.watch<ForecastProvider>().use24Hour;
+    final use24Hour = context.watch<SettingsProvider>().use24Hour;
     final fmt = DateFormat(use24Hour ? 'EEE, MMM d HH:mm' : 'EEE, MMM d h:mm a');
     final timestamp = fmt.format(location.cacheTimestamp.toLocal());
     return Container(

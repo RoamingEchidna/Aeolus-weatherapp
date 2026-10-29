@@ -23,11 +23,11 @@ class AlertBanner extends StatelessWidget {
         ? topAlert.headline
         : '${alerts.length} active alerts — tap to view';
 
-    return GestureDetector(
-      onTap: () => AlertDetailSheet.show(context, alerts),
-      child: Container(
-        width: double.infinity,
-        color: color,
+    return Material(
+      color: color,
+      child: InkWell(
+        onTap: () => AlertDetailSheet.show(context, alerts),
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(children: [
           const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
@@ -45,6 +45,7 @@ class AlertBanner extends StatelessWidget {
           ),
           const Icon(Icons.chevron_right, color: Colors.white),
         ]),
+        ),
       ),
     );
   }

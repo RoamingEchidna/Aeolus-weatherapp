@@ -9,7 +9,7 @@ import 'services/nws_service.dart';
 import 'services/usno_service.dart';
 import 'services/notification_service.dart';
 import 'services/openuv_service.dart';
-import 'models/saved_location.dart';
+import 'services/location_refresher.dart';
 
 // This must be a top-level function — WorkManager calls it in an isolate.
 @pragma('vm:entry-point')
@@ -44,9 +44,7 @@ void backgroundWorkerCallback() {
       final notificationsEnabled = prefs.getBool('severeWeatherNotifications') ?? false;
 
       final cacheService = CacheService(prefs);
-      final locations = cacheService.loadAll()
-          .where((l) => l.isPinned && l.displayName != 'Narnia')
-          .toList();
+      final locations = cacheService.loadAll().where((l) => l.isPinned).toList();
 
       if (locations.isEmpty) {
         await _recordResult(prefs, 'skipped_no_pinned_locations');
@@ -54,31 +52,33 @@ void backgroundWorkerCallback() {
       }
 
       final client = http.Client();
-      final nwsService = NwsService(client: client);
-      final usnoService = UsnoService(client: http.Client());
       final openUvService = OpenUvService(client: client);
 
       // Load UV key from prefs if user set one.
       final uvKey = prefs.getString('openUvApiKey');
       if (uvKey != null) openUvService.setApiKey(uvKey);
 
+      final refresher = LocationRefresher(
+        nwsService: NwsService(client: client),
+        usnoService: UsnoService(client: http.Client()),
+        openUvService: openUvService,
+      );
+
       bool anyFailed = false;
 
       for (final loc in locations) {
         try {
-          await _fetchAndSave(
-            loc: loc,
-            cacheService: cacheService,
-            nwsService: nwsService,
-            usnoService: usnoService,
-            openUvService: openUvService,
+          final updated = await refresher.refresh(
+            displayName: loc.displayName,
+            lat: loc.lat,
+            lon: loc.lon,
+            cached: loc,
+            lastAccessed: loc.lastAccessed,
           );
+          // Re-read the list before saving in case the app saved meanwhile.
+          cacheService.saveAll(
+              cacheService.addOrUpdate(cacheService.loadAll(), updated));
           if (notificationsEnabled) {
-            final fresh = cacheService.loadAll();
-            final updated = fresh.firstWhere(
-              (l) => l.displayName == loc.displayName,
-              orElse: () => loc,
-            );
             await NotificationService.postAlertNotification(
               loc.displayName,
               updated.cachedAlerts,
@@ -122,72 +122,4 @@ void backgroundWorkerCallback() {
 Future<void> _recordResult(SharedPreferences prefs, String result) async {
   await prefs.setString(kPrefLastSyncResult, result);
   await prefs.setString(kPrefLastSyncCompletedAt, DateTime.now().toIso8601String());
-}
-
-Future<void> _fetchAndSave({
-  required SavedLocation loc,
-  required CacheService cacheService,
-  required NwsService nwsService,
-  required UsnoService usnoService,
-  required OpenUvService openUvService,
-}) async {
-  final now = DateTime.now();
-
-  final result = await nwsService.fetchForecast(loc.lat, loc.lon);
-  final rawAstroDays = await usnoService.fetchAstroData(
-    lat: loc.lat,
-    lon: loc.lon,
-    windowStart: now,
-    windowEnd: now.add(const Duration(days: 7)),
-    tzOffsetHours: result.tzOffsetHours,
-  );
-
-  // Build existing UV map from cached astro data.
-  final existingUv = <String, int>{};
-  for (final d in loc.cachedAstroData) {
-    if (d.uvIndex != null) {
-      final k = '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
-      existingUv[k] = d.uvIndex!;
-    }
-  }
-
-  final uvMap = await openUvService.fetchUvForWindow(
-    lat: loc.lat,
-    lon: loc.lon,
-    existing: existingUv,
-    windowStart: now,
-  );
-
-  final astroDays = rawAstroDays.map((d) {
-    final key = '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
-    final uv = uvMap[key];
-    return uv != null ? d.copyWith(uvIndex: uv) : d;
-  }).toList();
-
-  final lookback = now.subtract(const Duration(hours: 24));
-  final newStart = result.periods.isNotEmpty ? result.periods.first.startTime : now;
-  final yesterdayPeriods = loc.cachedForecast
-      .where((p) => !p.startTime.isBefore(lookback) && p.startTime.isBefore(newStart))
-      .toList();
-  final mergedPeriods = [...yesterdayPeriods, ...result.periods];
-
-  final updated = SavedLocation(
-    displayName: loc.displayName,
-    lat: loc.lat,
-    lon: loc.lon,
-    lastAccessed: loc.lastAccessed,
-    cachedForecast: mergedPeriods,
-    cachedAlerts: result.alerts,
-    cacheTimestamp: now,
-    cachedAstroData: astroDays,
-    isPinned: loc.isPinned,
-    postcode: loc.postcode,
-    tzOffsetHours: result.tzOffsetHours,
-    timeZone: result.timeZone,
-  );
-
-  // Read fresh list in case a previous iteration updated it.
-  final fresh = cacheService.loadAll();
-  final merged = cacheService.addOrUpdate(fresh, updated);
-  cacheService.saveAll(merged);
 }

@@ -5,8 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:workmanager/workmanager.dart';
 import 'constants.dart';
 import 'providers/forecast_provider.dart';
+import 'providers/settings_provider.dart';
 import 'services/nws_service.dart';
-import 'services/nominatim_service.dart';
 import 'services/cache_service.dart';
 import 'services/usno_service.dart';
 import 'services/openuv_service.dart';
@@ -21,19 +21,27 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final client = http.Client();
 
-  final provider = ForecastProvider(
+  final openUvService = OpenUvService(client: client);
+
+  // Settings first: it loads the saved OpenUV key into the shared service.
+  final settings = SettingsProvider(prefs: prefs, openUvService: openUvService)
+    ..init();
+  final forecast = ForecastProvider(
     nwsService: NwsService(client: client),
     nominatimService: NominatimService(client: client),
     cacheService: CacheService(prefs),
     usnoService: UsnoService(client: http.Client()),
-    epaUvService: OpenUvService(client: client),
+    openUvService: openUvService,
     prefs: prefs,
   );
-  await provider.init();
+  await forecast.init();
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: provider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider.value(value: forecast),
+      ],
       child: const WeatherApp(),
     ),
   );
@@ -44,7 +52,7 @@ class WeatherApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.select<ForecastProvider, bool>((p) => p.isDarkMode);
+    final isDark = context.select<SettingsProvider, bool>((s) => s.isDarkMode);
     return MaterialApp(
       title: 'Weather Forecast',
       theme: ThemeData(

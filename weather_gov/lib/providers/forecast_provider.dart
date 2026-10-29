@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../constants.dart';
-import '../models/hourly_period.dart';
 import '../models/saved_location.dart';
 import '../services/nominatim_service.dart';
 export '../services/nominatim_service.dart' show SuggestionResult, NominatimService;
@@ -9,26 +7,18 @@ import '../services/nws_service.dart';
 import '../services/cache_service.dart';
 import '../services/usno_service.dart';
 import '../services/openuv_service.dart';
-import '../services/fake_forecast.dart';
-import '../services/background_sync_service.dart';
+import '../services/location_refresher.dart';
 
+/// Saved locations and their forecasts: search, fetch, pin, delete.
+/// User preferences live in [SettingsProvider].
 class ForecastProvider extends ChangeNotifier {
-  final NwsService _nwsService;
   final NominatimService _nominatimService;
   final CacheService _cacheService;
-  final UsnoService _usnoService;
-  final OpenUvService _openUvService;
+  final LocationRefresher _refresher;
   final SharedPreferences? _prefs;
 
   SavedLocation? currentLocation;
   List<SavedLocation> savedLocations = [];
-  Map<String, bool> visibleRows = Map.from(kDefaultRowVisibility);
-  List<String> rowOrder = List.from(kAllRows);
-  bool isDarkMode = false;
-  bool use24Hour = false;
-  bool useMetric = false;
-  bool syncPinnedOnOpen = false;
-  bool severeWeatherNotifications = false;
   bool isLoading = false;
   String? errorMessage;
 
@@ -37,13 +27,15 @@ class ForecastProvider extends ChangeNotifier {
     required NominatimService nominatimService,
     required CacheService cacheService,
     required UsnoService usnoService,
-    required OpenUvService epaUvService,
+    required OpenUvService openUvService,
     SharedPreferences? prefs,
-  })  : _nwsService = nwsService,
-        _nominatimService = nominatimService,
+  })  : _nominatimService = nominatimService,
         _cacheService = cacheService,
-        _usnoService = usnoService,
-        _openUvService = epaUvService,
+        _refresher = LocationRefresher(
+          nwsService: nwsService,
+          usnoService: usnoService,
+          openUvService: openUvService,
+        ),
         _prefs = prefs;
 
   Future<void> init() async {
@@ -52,10 +44,7 @@ class ForecastProvider extends ChangeNotifier {
       _sortLocations();
       currentLocation = savedLocations.first;
     }
-    _loadPreferences();
     notifyListeners();
-    BackgroundSyncService.removeLegacyTasks();
-    if (syncPinnedOnOpen) BackgroundSyncService.schedule();
   }
 
   void _sortLocations() {
@@ -63,38 +52,6 @@ class ForecastProvider extends ChangeNotifier {
       if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
       return b.lastAccessed.compareTo(a.lastAccessed);
     });
-  }
-
-  String? get openUvApiKey => _prefs?.getString('openUvApiKey');
-
-  // Background-sync diagnostics, so the on/off toggle isn't a black box —
-  // see background_worker.dart for where these get written.
-  String? get lastSyncScheduledAt => _prefs?.getString(kPrefLastScheduledAt);
-  String? get nextSyncScheduledFor => _prefs?.getString(kPrefNextScheduledFor);
-  String? get lastSyncAttemptAt => _prefs?.getString(kPrefLastSyncAttemptAt);
-  String? get lastSyncResult => _prefs?.getString(kPrefLastSyncResult);
-  String? get lastSyncCompletedAt => _prefs?.getString(kPrefLastSyncCompletedAt);
-
-  static const _batteryWarningCooldown = Duration(days: 15);
-
-  /// Whether the battery-optimization warning dialog should be shown again
-  /// (i.e. it either hasn't been shown before, or it's been 15+ days).
-  bool get shouldShowBatteryWarning {
-    final raw = _prefs?.getString('lastBatteryWarningShownAt');
-    final last = raw != null ? DateTime.tryParse(raw) : null;
-    if (last == null) return true;
-    return DateTime.now().difference(last) >= _batteryWarningCooldown;
-  }
-
-  void recordBatteryWarningShown() {
-    _prefs?.setString('lastBatteryWarningShownAt', DateTime.now().toIso8601String());
-  }
-
-  /// Re-reads diagnostic keys from disk. Needed because the background
-  /// isolate writes them independently of this provider's in-memory state.
-  Future<void> refreshSyncDiagnostics() async {
-    await _prefs?.reload();
-    notifyListeners();
   }
 
   /// Re-reads saved locations from disk. The nightly sync runs in its own
@@ -112,60 +69,6 @@ class ForecastProvider extends ChangeNotifier {
             .firstOrNull ??
         savedLocations.firstOrNull;
     notifyListeners();
-  }
-
-  Future<void> setOpenUvApiKey(String key) async {
-    final trimmed = key.trim();
-    if (trimmed.isEmpty) {
-      await _prefs?.remove('openUvApiKey');
-      _openUvService.setApiKey(null);
-    } else {
-      await _prefs?.setString('openUvApiKey', trimmed);
-      _openUvService.setApiKey(trimmed);
-    }
-    notifyListeners();
-  }
-
-  void reorderRow(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
-    final row = rowOrder.removeAt(oldIndex);
-    rowOrder.insert(newIndex, row);
-    _prefs?.setStringList('rowOrder', rowOrder);
-    notifyListeners();
-  }
-
-  void _loadPreferences() {
-    if (_prefs == null) return;
-    isDarkMode = _prefs.getBool('isDarkMode') ?? false;
-    use24Hour = _prefs.getBool('use24Hour') ?? false;
-    useMetric = _prefs.getBool('useMetric') ?? false;
-    syncPinnedOnOpen = _prefs.getBool('syncPinnedOnOpen') ?? false;
-    severeWeatherNotifications = _prefs.getBool('severeWeatherNotifications') ?? false;
-    for (final row in kAllRows) {
-      final saved = _prefs.getBool('row_$row');
-      if (saved != null) visibleRows[row] = saved;
-    }
-    final savedKey = _prefs.getString('openUvApiKey');
-    if (savedKey != null) _openUvService.setApiKey(savedKey);
-    final savedOrder = _prefs.getStringList('rowOrder');
-    if (savedOrder != null) {
-      // Merge: keep saved order, append any new rows not yet in saved order.
-      final merged = [...savedOrder.where(kAllRows.contains),
-                      ...kAllRows.where((r) => !savedOrder.contains(r))];
-      rowOrder = merged;
-    }
-  }
-
-  void _savePreferences() {
-    if (_prefs == null) return;
-    _prefs.setBool('isDarkMode', isDarkMode);
-    _prefs.setBool('use24Hour', use24Hour);
-    _prefs.setBool('useMetric', useMetric);
-    _prefs.setBool('syncPinnedOnOpen', syncPinnedOnOpen);
-    _prefs.setBool('severeWeatherNotifications', severeWeatherNotifications);
-    for (final entry in visibleRows.entries) {
-      _prefs.setBool('row_${entry.key}', entry.value);
-    }
   }
 
   Future<List<SuggestionResult>> getSuggestions(String query) =>
@@ -186,11 +89,6 @@ class ForecastProvider extends ChangeNotifier {
   }
 
   Future<void> searchLocation(String query) async {
-    if (query.trim().toLowerCase() == 'narnia') {
-      loadTestLocation();
-      return;
-    }
-
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -212,10 +110,6 @@ class ForecastProvider extends ChangeNotifier {
 
   Future<void> refreshCurrentLocation() async {
     if (currentLocation == null) return;
-    if (currentLocation!.displayName == 'Narnia') {
-      loadTestLocation();
-      return;
-    }
     isLoading = true;
     errorMessage = null;
     notifyListeners();
@@ -239,74 +133,14 @@ class ForecastProvider extends ChangeNotifier {
 
   Future<void> _fetchAndSave(
       String displayName, double lat, double lon, {String? postcode}) async {
-    final now = DateTime.now();
-
-    // Fetch NWS and astro data (USNO needs tzOffset so it runs after NWS).
-    final result = await _nwsService.fetchForecast(lat, lon);
-    final rawAstroDays = await _usnoService.fetchAstroData(
-      lat: lat,
-      lon: lon,
-      windowStart: now,
-      windowEnd: now.add(const Duration(days: 7)),
-      tzOffsetHours: result.tzOffsetHours,
-    );
-
-    // Build existing UV map from cached astro data.
-    final cachedLocation = savedLocations
-        .where((l) => l.displayName == displayName)
-        .firstOrNull;
-    final existingUv = <String, int>{};
-    if (cachedLocation != null) {
-      for (final d in cachedLocation.cachedAstroData) {
-        if (d.uvIndex != null) {
-          final k = '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
-          existingUv[k] = d.uvIndex!;
-        }
-      }
-    }
-
-    // Fetch UV — only missing days + today.
-    final uvMap = await _openUvService.fetchUvForWindow(
-      lat: lat,
-      lon: lon,
-      existing: existingUv,
-      windowStart: now,
-    );
-
-    final astroDays = rawAstroDays.map((d) {
-      final key =
-          '${d.date.year}-${d.date.month.toString().padLeft(2, '0')}-${d.date.day.toString().padLeft(2, '0')}';
-      final uv = uvMap[key];
-      return uv != null ? d.copyWith(uvIndex: uv) : d;
-    }).toList();
-
-    // Prepend cached periods from the past 24 hours that predate the new fetch.
-    final lookback = now.subtract(const Duration(hours: 24));
-    final newStart = result.periods.isNotEmpty
-        ? result.periods.first.startTime
-        : now;
-    final yesterdayPeriods = cachedLocation != null
-        ? cachedLocation.cachedForecast
-            .where((p) =>
-                !p.startTime.isBefore(lookback) &&
-                p.startTime.isBefore(newStart))
-            .toList()
-        : <HourlyPeriod>[];
-    final mergedPeriods = [...yesterdayPeriods, ...result.periods];
-
-    final location = SavedLocation(
+    final location = await _refresher.refresh(
       displayName: displayName,
       lat: lat,
       lon: lon,
-      lastAccessed: now,
-      cachedForecast: mergedPeriods,
-      cachedAlerts: result.alerts,
-      cacheTimestamp: now,
-      cachedAstroData: astroDays,
-      isPinned: cachedLocation?.isPinned ?? false,
-      postcode: postcode ?? cachedLocation?.postcode,
-      tzOffsetHours: result.tzOffsetHours,
-      timeZone: result.timeZone,
+      cached: savedLocations
+          .where((l) => l.displayName == displayName)
+          .firstOrNull,
+      postcode: postcode,
     );
 
     savedLocations = _cacheService.addOrUpdate(savedLocations, location);
@@ -316,9 +150,7 @@ class ForecastProvider extends ChangeNotifier {
   }
 
   Future<void> refreshPinnedLocations() async {
-    final pinned = savedLocations
-        .where((l) => l.isPinned && l.displayName != 'Narnia')
-        .toList();
+    final pinned = savedLocations.where((l) => l.isPinned).toList();
     if (pinned.isEmpty) return;
 
     final originalCurrentDisplayName = currentLocation?.displayName;
@@ -347,15 +179,6 @@ class ForecastProvider extends ChangeNotifier {
 
     errorMessage = anyFailed ? 'Some locations failed to refresh, showing cached data' : null;
     isLoading = false;
-    notifyListeners();
-  }
-
-  void loadTestLocation() {
-    final loc = buildFakeSavedLocation();
-    savedLocations = _cacheService.addOrUpdate(savedLocations, loc);
-    _sortLocations();
-    _cacheService.saveAll(savedLocations);
-    currentLocation = loc;
     notifyListeners();
   }
 
@@ -388,44 +211,13 @@ class ForecastProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleRow(String rowName) {
-    visibleRows[rowName] = !(visibleRows[rowName] ?? true);
-    _savePreferences();
-    notifyListeners();
-  }
-
-  void toggleDarkMode() {
-    isDarkMode = !isDarkMode;
-    _savePreferences();
-    notifyListeners();
-  }
-
-  void toggle24Hour() {
-    use24Hour = !use24Hour;
-    _savePreferences();
-    notifyListeners();
-  }
-
-  void toggleMetric() {
-    useMetric = !useMetric;
-    _savePreferences();
-    notifyListeners();
-  }
-
-  void toggleSyncPinnedOnOpen() {
-    syncPinnedOnOpen = !syncPinnedOnOpen;
-    _savePreferences();
-    if (syncPinnedOnOpen) {
-      BackgroundSyncService.schedule();
-    } else {
-      BackgroundSyncService.cancel();
-    }
-    notifyListeners();
-  }
-
-  void toggleSevereWeatherNotifications() {
-    severeWeatherNotifications = !severeWeatherNotifications;
-    _savePreferences();
+  /// Undoes [deleteLocation]. [wasCurrent] reopens it if it was the one
+  /// on screen.
+  void restoreLocation(SavedLocation location, {required bool wasCurrent}) {
+    savedLocations = _cacheService.addOrUpdate(savedLocations, location);
+    _sortLocations();
+    if (wasCurrent || currentLocation == null) currentLocation = location;
+    _cacheService.saveAll(savedLocations);
     notifyListeners();
   }
 }

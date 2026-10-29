@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/saved_location.dart';
-import '../providers/forecast_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/radar_frame_cache.dart';
 import '../services/radar_service.dart';
 
@@ -216,7 +216,7 @@ class _RadarScreenState extends State<RadarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final use24Hour = context.watch<ForecastProvider>().use24Hour;
+    final use24Hour = context.watch<SettingsProvider>().use24Hour;
     final currentFrame =
         _times.isEmpty ? null : _frames[_times[_index]];
 
@@ -259,7 +259,11 @@ class _RadarScreenState extends State<RadarScreen> {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                if (_loading) const LinearProgressIndicator(),
+                // Space is always reserved so the radar doesn't jump 4px.
+                SizedBox(
+                  height: 4,
+                  child: _loading ? const LinearProgressIndicator() : null,
+                ),
                 if (currentFrame == null)
                   const Expanded(
                       child: Center(child: CircularProgressIndicator()))
@@ -314,7 +318,8 @@ class _RadarScreenState extends State<RadarScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _frameLabel(_times[_index], use24Hour),
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()]),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),

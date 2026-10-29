@@ -1,13 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:weather_gov/providers/forecast_provider.dart';
-import 'package:weather_gov/services/nominatim_service.dart';
 import 'package:weather_gov/services/nws_service.dart';
 import 'package:weather_gov/services/cache_service.dart';
 import 'package:weather_gov/services/usno_service.dart';
+import 'package:weather_gov/services/openuv_service.dart';
 import 'package:weather_gov/models/astro_day.dart';
-import 'package:weather_gov/constants.dart'
-    show kRowTempGroup, kRowWindGroup, kRowAstro;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -17,6 +15,7 @@ http.Client _makeNwsClient() {
       return http.Response('''
         {"properties":{"gridId":"VEF","gridX":16,"gridY":169,
          "forecastHourly":"https://api.weather.gov/gridpoints/VEF/16,169/forecast/hourly",
+         "forecastGridData":"https://api.weather.gov/gridpoints/VEF/16,169",
          "relativeLocation":{"properties":{"city":"Bishop","state":"CA"}},
          "timeZone":"America/Los_Angeles"}}
       ''', 200);
@@ -67,6 +66,10 @@ http.Client _makeUsnoClient() {
   ''', 200));
 }
 
+// UV is optional data; a failed fetch is treated as "no UV".
+OpenUvService _makeOpenUvService() =>
+    OpenUvService(client: MockClient((_) async => http.Response('', 500)));
+
 Future<ForecastProvider> _makeProvider({http.Client? usnoClient}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -75,17 +78,16 @@ Future<ForecastProvider> _makeProvider({http.Client? usnoClient}) async {
     nominatimService: NominatimService(client: _makeNominatimClient()),
     cacheService: CacheService(prefs),
     usnoService: UsnoService(client: usnoClient ?? _makeUsnoClient()),
+    openUvService: _makeOpenUvService(),
     prefs: prefs,
   );
 }
 
 void main() {
   group('ForecastProvider initial state', () {
-    test('starts with no location and default row visibility', () async {
+    test('starts with no location', () async {
       final provider = await _makeProvider();
       expect(provider.currentLocation, isNull);
-      expect(provider.visibleRows[kRowTempGroup], isTrue);
-      expect(provider.visibleRows[kRowWindGroup], isTrue);
       expect(provider.isLoading, isFalse);
     });
   });
@@ -112,6 +114,7 @@ void main() {
         ),
         cacheService: CacheService(prefs),
         usnoService: UsnoService(client: _makeUsnoClient()),
+        openUvService: _makeOpenUvService(),
       );
 
       await provider.searchLocation('xyzxyz');
@@ -128,30 +131,22 @@ void main() {
       expect(provider.currentLocation!.cachedAstroData, isNotEmpty);
       expect(provider.currentLocation!.cachedAstroData.first, isA<AstroDay>());
     });
-
-    test('kRowAstro defaults to false', () async {
-      final provider = await _makeProvider();
-      expect(provider.visibleRows[kRowAstro], isFalse);
-    });
   });
 
-  group('ForecastProvider.toggleRow', () {
-    test('flips row visibility', () async {
+  group('ForecastProvider.restoreLocation', () {
+    test('undoes a delete, including reopening the current location',
+        () async {
       final provider = await _makeProvider();
-      expect(provider.visibleRows[kRowTempGroup], isTrue);
-      provider.toggleRow(kRowTempGroup);
-      expect(provider.visibleRows[kRowTempGroup], isFalse);
-      provider.toggleRow(kRowTempGroup);
-      expect(provider.visibleRows[kRowTempGroup], isTrue);
-    });
-  });
+      await provider.searchLocation('Bishop, CA');
+      final loc = provider.currentLocation!;
 
-  group('ForecastProvider.toggleDarkMode', () {
-    test('flips isDarkMode', () async {
-      final provider = await _makeProvider();
-      expect(provider.isDarkMode, isFalse);
-      provider.toggleDarkMode();
-      expect(provider.isDarkMode, isTrue);
+      provider.deleteLocation(loc.displayName);
+      expect(provider.savedLocations, isEmpty);
+      expect(provider.currentLocation, isNull);
+
+      provider.restoreLocation(loc, wasCurrent: true);
+      expect(provider.savedLocations.single.displayName, loc.displayName);
+      expect(provider.currentLocation!.displayName, loc.displayName);
     });
   });
 

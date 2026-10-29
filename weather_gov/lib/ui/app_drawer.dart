@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../models/saved_location.dart';
 import '../providers/forecast_provider.dart';
+import '../providers/settings_provider.dart';
 
 class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
@@ -17,6 +19,9 @@ class _AppDrawerState extends State<AppDrawer> {
   final _searchController = TextEditingController();
   List<SuggestionResult> _suggestions = [];
   Timer? _debounce;
+  SavedLocation? _removed;
+  bool _removedWasCurrent = false;
+  Timer? _undoTimer;
 
   @override
   void initState() {
@@ -25,7 +30,7 @@ class _AppDrawerState extends State<AppDrawer> {
     // Diagnostic keys are written by the background isolate, so re-read
     // them from disk whenever the drawer opens rather than trusting
     // whatever was cached in memory at app launch.
-    context.read<ForecastProvider>().refreshSyncDiagnostics();
+    context.read<SettingsProvider>().refreshSyncDiagnostics();
   }
 
   String _formatSyncDiagTime(String? iso) {
@@ -81,8 +86,30 @@ class _AppDrawerState extends State<AppDrawer> {
     } catch (_) {}
   }
 
+  void _removeLocation(ForecastProvider provider, SavedLocation loc) {
+    _undoTimer?.cancel();
+    setState(() {
+      _removed = loc;
+      _removedWasCurrent =
+          loc.displayName == provider.currentLocation?.displayName;
+    });
+    provider.deleteLocation(loc.displayName);
+    _undoTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _removed = null);
+    });
+  }
+
+  void _undoRemove(ForecastProvider provider) {
+    final loc = _removed;
+    if (loc == null) return;
+    _undoTimer?.cancel();
+    provider.restoreLocation(loc, wasCurrent: _removedWasCurrent);
+    setState(() => _removed = null);
+  }
+
   @override
   void dispose() {
+    _undoTimer?.cancel();
     _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
@@ -108,8 +135,8 @@ class _AppDrawerState extends State<AppDrawer> {
     setState(() => _suggestions = []);
   }
 
-  void _showApiKeyDialog(BuildContext context, ForecastProvider provider) {
-    final controller = TextEditingController(text: provider.openUvApiKey ?? '');
+  void _showApiKeyDialog(BuildContext context, SettingsProvider settings) {
+    final controller = TextEditingController(text: settings.openUvApiKey ?? '');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -149,7 +176,7 @@ class _AppDrawerState extends State<AppDrawer> {
           ),
           TextButton(
             onPressed: () {
-              provider.setOpenUvApiKey(controller.text);
+              settings.setOpenUvApiKey(controller.text);
               Navigator.pop(ctx);
             },
             child: const Text('Save'),
@@ -170,6 +197,7 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ForecastProvider>();
+    final settings = context.watch<SettingsProvider>();
 
     return Drawer(
       child: SafeArea(
@@ -250,9 +278,11 @@ class _AppDrawerState extends State<AppDrawer> {
                             selected: isCurrent,
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 4),
-                            leading: GestureDetector(
-                              onTap: () => provider.pinLocation(loc.displayName),
-                              child: Icon(
+                            leading: IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: loc.isPinned ? 'Unpin' : 'Pin',
+                              onPressed: () => provider.pinLocation(loc.displayName),
+                              icon: Icon(
                                 loc.isPinned
                                     ? Icons.push_pin
                                     : Icons.push_pin_outlined,
@@ -264,9 +294,11 @@ class _AppDrawerState extends State<AppDrawer> {
                               style: Theme.of(context).textTheme.bodySmall,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            trailing: GestureDetector(
-                              onTap: () => provider.deleteLocation(loc.displayName),
-                              child: const Icon(Icons.close, size: 18),
+                            trailing: IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: 'Remove',
+                              onPressed: () => _removeLocation(provider, loc),
+                              icon: const Icon(Icons.close, size: 18),
                             ),
                             onTap: () {
                               Navigator.pop(context);
@@ -277,6 +309,23 @@ class _AppDrawerState extends State<AppDrawer> {
                       ),
                     ],
 
+                    // Undo for the last removal; outside the list above so it
+                    // still shows after removing the only location.
+                    if (_removed != null)
+                      ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.only(left: 12, right: 4),
+                        title: Text(
+                          'Removed ${_removed!.displayName}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => _undoRemove(provider),
+                          child: const Text('Undo'),
+                        ),
+                      ),
+
                     const Divider(height: 24),
 
                     // Row toggles — drag to reorder
@@ -284,13 +333,13 @@ class _AppDrawerState extends State<AppDrawer> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       padding: EdgeInsets.zero,
-                      onReorder: provider.reorderRow,
-                      children: provider.rowOrder.map((row) => SwitchListTile(
+                      onReorder: settings.reorderRow,
+                      children: settings.rowOrder.map((row) => SwitchListTile(
                         key: ValueKey(row),
                         title: Text(row,
                             style: Theme.of(context).textTheme.bodySmall),
-                        value: provider.visibleRows[row] ?? true,
-                        onChanged: (_) => provider.toggleRow(row),
+                        value: settings.visibleRows[row] ?? true,
+                        onChanged: (_) => settings.toggleRow(row),
                         dense: true,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                         secondary: const Icon(Icons.drag_handle, size: 18),
@@ -308,12 +357,12 @@ class _AppDrawerState extends State<AppDrawer> {
             SwitchListTile(
               dense: true,
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
-              value: provider.syncPinnedOnOpen,
+              value: settings.syncPinnedOnOpen,
               onChanged: (_) {
-                final turningOn = !provider.syncPinnedOnOpen;
-                provider.toggleSyncPinnedOnOpen();
-                if (turningOn && provider.shouldShowBatteryWarning) {
-                  provider.recordBatteryWarningShown();
+                final turningOn = !settings.syncPinnedOnOpen;
+                settings.toggleSyncPinnedOnOpen();
+                if (turningOn && settings.shouldShowBatteryWarning) {
+                  settings.recordBatteryWarningShown();
                   _showBatteryOptimizationDialog(context);
                 }
               },
@@ -322,46 +371,44 @@ class _AppDrawerState extends State<AppDrawer> {
                   Text('Auto Sync',
                       style: Theme.of(context).textTheme.bodyMedium),
                   const Spacer(),
-                  GestureDetector(
-                    onTap: provider.isLoading ||
+                  // Drawn at 28px, but keeps Android's 48dp tap area.
+                  IconButton.filled(
+                    tooltip: 'Sync pinned now',
+                    onPressed: provider.isLoading ||
                             !provider.savedLocations.any((l) => l.isPinned)
                         ? null
                         : () {
                             Navigator.pop(context);
                             provider.refreshPinnedLocations();
                           },
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: provider.isLoading ||
-                                !provider.savedLocations.any((l) => l.isPinned)
-                            ? Theme.of(context).disabledColor
-                            : Theme.of(context).colorScheme.primary,
-                      ),
-                      child: provider.isLoading
-                          ? Padding(
-                              padding: const EdgeInsets.all(6),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Theme.of(context).colorScheme.onPrimary,
-                              ),
-                            )
-                          : Icon(
-                              Icons.sync,
-                              size: 18,
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size(28, 28),
+                      minimumSize: const Size(28, 28),
+                      padding: EdgeInsets.zero,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      disabledBackgroundColor: Theme.of(context).disabledColor,
+                      disabledForegroundColor:
+                          Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    icon: provider.isLoading
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
                               color: Theme.of(context).colorScheme.onPrimary,
                             ),
-                    ),
+                          )
+                        : const Icon(Icons.sync, size: 18),
                   ),
                 ],
               ),
-              subtitle: provider.syncPinnedOnOpen
+              subtitle: settings.syncPinnedOnOpen
                   ? Text(
-                      'Last attempt: ${_formatSyncDiagTime(provider.lastSyncAttemptAt)}'
-                      ' (${provider.lastSyncResult ?? "pending"})\n'
-                      'Next scheduled: ${_formatSyncDiagTime(provider.nextSyncScheduledFor)}',
+                      'Last attempt: ${_formatSyncDiagTime(settings.lastSyncAttemptAt)}'
+                      ' (${settings.lastSyncResult ?? "pending"})\n'
+                      'Next scheduled: ${_formatSyncDiagTime(settings.nextSyncScheduledFor)}',
                       style: Theme.of(context).textTheme.bodySmall,
                     )
                   : null,
@@ -371,16 +418,16 @@ class _AppDrawerState extends State<AppDrawer> {
             SwitchListTile(
               dense: true,
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
-              value: provider.severeWeatherNotifications,
-              onChanged: provider.syncPinnedOnOpen
+              value: settings.severeWeatherNotifications,
+              onChanged: settings.syncPinnedOnOpen
                   ? (_) async {
-                      if (!provider.severeWeatherNotifications) {
+                      if (!settings.severeWeatherNotifications) {
                         await FlutterLocalNotificationsPlugin()
                             .resolvePlatformSpecificImplementation<
                                 AndroidFlutterLocalNotificationsPlugin>()
                             ?.requestNotificationsPermission();
                       }
-                      provider.toggleSevereWeatherNotifications();
+                      settings.toggleSevereWeatherNotifications();
                     }
                   : null,
               title: Text(
@@ -393,11 +440,11 @@ class _AppDrawerState extends State<AppDrawer> {
             SwitchListTile(
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
               title: Text(
-                provider.isDarkMode ? 'Dark Mode' : 'Light Mode',
+                settings.isDarkMode ? 'Dark Mode' : 'Light Mode',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              value: provider.isDarkMode,
-              onChanged: (_) => provider.toggleDarkMode(),
+              value: settings.isDarkMode,
+              onChanged: (_) => settings.toggleDarkMode(),
               dense: true,
             ),
 
@@ -405,11 +452,11 @@ class _AppDrawerState extends State<AppDrawer> {
             SwitchListTile(
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
               title: Text(
-                provider.useMetric ? '°C / km/h' : '°F / mp/h',
+                settings.useMetric ? '°C / km/h' : '°F / mp/h',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              value: !provider.useMetric,
-              onChanged: (_) => provider.toggleMetric(),
+              value: !settings.useMetric,
+              onChanged: (_) => settings.toggleMetric(),
               dense: true,
             ),
 
@@ -417,16 +464,16 @@ class _AppDrawerState extends State<AppDrawer> {
             SwitchListTile(
               contentPadding: const EdgeInsets.only(left: 12, right: 4),
               title: Text(
-                provider.use24Hour ? '00:00 Time' : 'AM/PM Time',
+                settings.use24Hour ? '00:00 Time' : 'AM/PM Time',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-              value: provider.use24Hour,
-              onChanged: (_) => provider.toggle24Hour(),
+              value: settings.use24Hour,
+              onChanged: (_) => settings.toggle24Hour(),
               dense: true,
             ),
 
             // OpenUV API key — only shown when no key has been set
-            if (provider.openUvApiKey == null)
+            if (settings.openUvApiKey == null)
               ListTile(
                 contentPadding: const EdgeInsets.only(left: 12, right: 4),
                 leading: const Icon(Icons.vpn_key_outlined),
@@ -435,7 +482,7 @@ class _AppDrawerState extends State<AppDrawer> {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 dense: true,
-                onTap: () => _showApiKeyDialog(context, provider),
+                onTap: () => _showApiKeyDialog(context, settings),
               ),
           ],
         ),
